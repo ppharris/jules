@@ -43,15 +43,17 @@ from .version78_79 import *
 from .version79_80 import *
 from .version80_81 import *
 
-class vnYY_txxxx(MacroUpgrade):
+class vn80_t0000(MacroUpgrade):
 
-    """Upgrade macro from JULES by Author"""
+    """Upgrade macro from JULES by Phil Harris"""
 
-    BEFORE_TAG = "vnY.Y"
-    AFTER_TAG = "vnY.Y_txxxx"
+    BEFORE_TAG = "vn8.0"
+    AFTER_TAG = "vn8.0_t0000"
 
     def upgrade(self, config, meta_config=None):
         """Upgrade a JULES runtime app configuration."""
 
         # Add settings
+        self.add_setting(config, ["namelist:jules_vegetation", "l_resp_nocturnal"], ".false.")
+
         return config, self.reports

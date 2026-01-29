@@ -190,7 +190,12 @@ TYPE :: progs_data_type
   ! photosynthetic capacity (K).
   REAL(KIND=real_jlslsm), ALLOCATABLE :: f_nsc_pft(:,:)
     ! Non-structural carbohydrate mass fraction (kgC/kgC)
-
+  REAL(KIND=real_jlslsm), ALLOCATABLE :: tstar_ref_pft(:,:)
+    ! Reference temperature for dark respiration (K).
+  REAL(KIND=real_jlslsm), ALLOCATABLE :: resp_ref_pft(:,:)
+    ! Reference plant respiration rate (kg C/m2/sec).
+  REAL(KIND=real_jlslsm), ALLOCATABLE :: resp_fac_pft(:,:)
+    ! Plant respiration nocturnal state (dimensionless).
 END TYPE
 
 !================================
@@ -254,6 +259,9 @@ TYPE :: progs_type
   REAL(KIND=real_jlslsm), POINTER :: t_home_gb(:)
   REAL(KIND=real_jlslsm), POINTER :: t_growth_gb(:)
   REAL(KIND=real_jlslsm), POINTER :: f_nsc_pft(:,:)
+  REAL(KIND=real_jlslsm), POINTER :: tstar_ref_pft(:,:)
+  REAL(KIND=real_jlslsm), POINTER :: resp_ref_pft(:,:)
+  REAL(KIND=real_jlslsm), POINTER :: resp_fac_pft(:,:)
 END TYPE
 
 LOGICAL :: l_broadcast_soilt = .FALSE.
@@ -274,7 +282,8 @@ SUBROUTINE prognostics_alloc(land_pts, t_i_length, t_j_length,                 &
                        dim_cslayer, dim_cs1, dim_ch4layer,                     &
                        nice, nice_use, soil_bgc_model, soil_model_ecosse,      &
                        l_layeredc, l_triffid, l_phenol, l_bedrock, l_red,      &
-                       nmasst, nnpft, l_acclim, l_sugar, progs_data)
+                       nmasst, nnpft, l_acclim, l_sugar, l_resp_nocturnal,     &
+                       progs_data)
 
 !No USE statements other than Dr Hook
 USE parkind1,    ONLY: jprb, jpim
@@ -289,7 +298,7 @@ INTEGER, INTENT(IN) :: land_pts, t_i_length, t_j_length,                       &
                        nmasst, nnpft
 
 LOGICAL, INTENT(IN) :: l_layeredc, l_triffid, l_phenol, l_bedrock, l_red,      &
-                       l_acclim, l_sugar
+                       l_acclim, l_sugar, l_resp_nocturnal
 
 TYPE(progs_data_type), INTENT(IN OUT) :: progs_data
   !Instance of the data type we need to allocate
@@ -448,6 +457,18 @@ END IF
 ALLOCATE(progs_data%f_nsc_pft(land_pts,npft))
 progs_data%f_nsc_pft(:,:) = 0.0
 
+! Prognostics for nocturnal plant respiration.
+IF ( l_resp_nocturnal ) THEN
+  ALLOCATE(progs_data%tstar_ref_pft(land_pts,npft))
+  ALLOCATE(progs_data%resp_ref_pft(land_pts,npft))
+  ALLOCATE(progs_data%resp_fac_pft(land_pts,npft))
+  progs_data%resp_ref_pft(:,:) = 0.0
+  progs_data%resp_fac_pft(:,:) = 0.9
+ELSE
+  ALLOCATE(progs_data%tstar_ref_pft(1,1))
+  ALLOCATE(progs_data%resp_ref_pft(1,1))
+  ALLOCATE(progs_data%resp_fac_pft(1,1))
+END IF
 
 !  ====prognostics module JULES-standalone only====
 ALLOCATE(progs_data%lai_pft(land_pts,npft))
@@ -576,6 +597,12 @@ IF ( ALLOCATED(progs_data%f_nsc_pft) ) THEN
   DEALLOCATE(progs_data%f_nsc_pft)
 END IF
 
+IF ( ALLOCATED(progs_data%resp_ref_pft) ) THEN
+  DEALLOCATE(progs_data%tstar_ref_pft)
+  DEALLOCATE(progs_data%resp_ref_pft)
+  DEALLOCATE(progs_data%resp_fac_pft)
+END IF
+
 !  ====prognostics module JULES-standalone only====
 DEALLOCATE(progs_data%lai_pft)
 DEALLOCATE(progs_data%canht_pft)
@@ -690,6 +717,9 @@ progs%years_since_harvest => progs_data%years_since_harvest
 progs%t_home_gb => progs_data%t_home_gb
 progs%t_growth_gb => progs_data%t_growth_gb
 progs%f_nsc_pft => progs_data%f_nsc_pft
+progs%tstar_ref_pft => progs_data%tstar_ref_pft
+progs%resp_ref_pft => progs_data%resp_ref_pft
+progs%resp_fac_pft => progs_data%resp_fac_pft
 
 IF (ALLOCATED(progs_data%seed_rain)) THEN
   progs%seed_rain => progs_data%seed_rain

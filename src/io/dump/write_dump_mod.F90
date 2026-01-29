@@ -334,6 +334,21 @@ DO i = 1,nvars
       CALL gather_land_field(progs%f_nsc_pft(:,n), global_data_2d(:,n))
     END DO
 
+  CASE ( 'tstar_ref' )
+    DO n = 1,npft
+      CALL gather_land_field(progs%tstar_ref_pft(:,n), global_data_2d(:,n))
+    END DO
+
+  CASE ( 'resp_ref' )
+    DO n = 1,npft
+      CALL gather_land_field(progs%resp_ref_pft(:,n), global_data_2d(:,n))
+    END DO
+
+  CASE ( 'resp_fac' )
+    DO n = 1,npft
+      CALL gather_land_field(progs%resp_fac_pft(:,n), global_data_2d(:,n))
+    END DO
+
     !Case if nsoilt == 1, so it is OK to hardwire the 2nd dimension to 1
   CASE ( 'cs' )
     DO n = 1,dim_cs1
@@ -985,7 +1000,8 @@ DO i = 1,nvars
 
       ! If it is a variable with one levels dimension, write the appropriate
       ! number of levels to global_data_2d.
-    CASE ( 'canht', 'lai', 'years_since_harvest', 'harvest_doy', 'f_nsc')
+    CASE ( 'canht', 'lai', 'years_since_harvest', 'harvest_doy', 'f_nsc',      &
+           'tstar_ref', 'resp_ref', 'resp_fac' )
       CALL file_write_var(FILE, var_ids(i), global_data_2d(:,1:npft))
 
     CASE ( 'cropdvi', 'croprootc', 'cropharvc', 'cropreservec',                &

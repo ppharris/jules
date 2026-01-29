@@ -9354,4 +9354,43 @@ DATA metadata(722) / var_metadata(                                             &
 ! Units
     "kg s-1"                                                                   &
   ) /
+!-----------------------------------------------------------------------------
+! Metadata for resp_ref
+!-----------------------------------------------------------------------------
+DATA metadata(723) / var_metadata(                                             &
+! String identifier
+    'tstar_ref',                                                               &
+! Variable type
+    var_type_pft,                                                              &
+! Long name
+    "PFT leaf temperature at reference condition",                             &
+! Units
+    "K"                                                                        &
+  ) /
+!-----------------------------------------------------------------------------
+! Metadata for resp_ref
+!-----------------------------------------------------------------------------
+DATA metadata(724) / var_metadata(                                             &
+! String identifier
+    'resp_ref',                                                                &
+! Variable type
+    var_type_pft,                                                              &
+! Long name
+    "PFT Plant respiration rate at reference condition",                       &
+! Units
+    "kg m-2 s-1"                                                               &
+  ) /
+!-----------------------------------------------------------------------------
+! Metadata for resp_fac
+!-----------------------------------------------------------------------------
+DATA metadata(725) / var_metadata(                                             &
+! String identifier
+    'resp_fac',                                                                &
+! Variable type
+    var_type_pft,                                                              &
+! Long name
+    "PFT Plant respiration adjustment factor",                                 &
+! Units - dimensionless
+    "1"                                                                        &
+  ) /
 #endif

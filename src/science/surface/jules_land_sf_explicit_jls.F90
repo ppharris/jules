@@ -78,6 +78,8 @@ SUBROUTINE jules_land_sf_explicit (                                            &
  !New arguments replacing USE statements
  !Fluxes (IN)
  t_home_gb, t_growth_gb,                                                       &
+ !Prognostics (IN OUT)
+ tstar_ref_pft, resp_ref_pft, resp_fac_pft,                                    &
  !urban_param (IN)
  emisr_gb, emisw_gb, hwr_gb,                                                   &
  !jules_mod (IN OUT)
@@ -714,6 +716,9 @@ REAL(KIND=real_jlslsm), INTENT(IN) :: sice_surft(land_pts,nsurft,nsmax),       &
                                       snowdepth_surft(land_pts,nsurft),        &
                                       tsnow_surft(land_pts,nsurft,nsmax),      &
                                       ds_surft(land_pts,nsurft,nsmax)
+REAL(KIND=real_jlslsm), INTENT(IN OUT) :: tstar_ref_pft(land_pts,npft)
+REAL(KIND=real_jlslsm), INTENT(IN OUT) :: resp_ref_pft(land_pts,npft)
+REAL(KIND=real_jlslsm), INTENT(IN OUT) :: resp_fac_pft(land_pts,npft)
 
 !c_elevate (OUT)
 REAL(KIND=real_jlslsm), INTENT(OUT) :: surf_hgt_surft(land_pts,nsurft),        &
@@ -1202,7 +1207,7 @@ CALL physiol (                                                                 &
   canhc_surft,vfrac_surft,emis_surft,l_emis_surft_set,emis_soil,flake,         &
   g_leaf,gs,gc_surft,gc_stom_surft,gc_corr,gpp,gpp_pft,npp,npp_pft,            &
   resp_p,resp_p_pft,resp_s_soilt,resp_l_pft,                                   &
-  resp_r_pft,resp_w_pft,n_leaf,                                                &
+  resp_r_pft,resp_w_pft,tstar_ref_pft,resp_ref_pft,resp_fac_pft,n_leaf,        &
   n_root,n_stem,lai_bal,                                                       &
   smc_soilt,wt_ext_surft,fsmc_pft,                                             &
   albsoil_soilt,cos_zenith_angle,                                              &

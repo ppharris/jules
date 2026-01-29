@@ -1489,6 +1489,18 @@ CASE ( 'f_nsc' )
   cube_land = cube_from_array(progs%f_nsc_pft)
   cube = map_from_land(cube_land)
 
+CASE ( 'tstar_ref' )
+  cube_land = cube_from_array(progs%tstar_ref_pft)
+  cube = map_from_land(cube_land)
+
+CASE ( 'resp_ref' )
+  cube_land = cube_from_array(progs%resp_ref_pft)
+  cube = map_from_land(cube_land)
+
+CASE ( 'resp_fac' )
+  cube_land = cube_from_array(progs%resp_fac_pft)
+  cube = map_from_land(cube_land)
+
 CASE ( 'resp_r' )
   cube_land = cube_from_array(trif_vars%resp_r_pft)
   cube = map_from_land(cube_land)

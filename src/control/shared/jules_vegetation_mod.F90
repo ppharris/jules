@@ -181,6 +181,8 @@ LOGICAL ::                                                                     &
        !      available NPP.
    l_sugar = .FALSE.,                                                          &
        ! Switch fo the non-structural carbohydrate model
+   l_resp_nocturnal = .FALSE.,                                                 &
+       ! Switch for using Bruhn et al nocturnal plant respiration.
 
 ! Switches for bug fixes.
     l_leaf_n_resp_fix = .FALSE.,                                               &
@@ -353,7 +355,7 @@ NAMELIST  / jules_vegetation/                                                  &
 ! Not used in the UM yet
     l_prescsow, l_recon,l_gleaf_fix,                                           &
     l_scale_resp_pm, l_use_pft_psi, fsmc_shape, l_croprotate,                  &
-    l_trif_biocrop, l_ag_expand, l_sugar,                                      &
+    l_trif_biocrop, l_ag_expand, l_sugar, l_resp_nocturnal,                    &
     ! RED variables
     l_red
 
@@ -977,6 +979,9 @@ CALL jules_print('jules_vegetation_mod',lineBuffer)
 WRITE(lineBuffer,*)' l_red = ',l_red
 CALL jules_print('jules_vegetation_mod',lineBuffer)
 
+WRITE(lineBuffer,*)' l_resp_nocturnal = ',l_resp_nocturnal
+CALL jules_print('jules_vegetation_mod',lineBuffer)
+
 CALL jules_print('jules_vegetation_mod',                                       &
     '- - - - - - end of namelist - - - - - -')
 
@@ -1080,6 +1085,7 @@ TYPE :: my_namelist
   LOGICAL :: l_limit_canhc
   LOGICAL :: l_sugar
   LOGICAL :: l_red
+  LOGICAL :: l_resp_nocturnal
 END TYPE my_namelist
 
 TYPE (my_namelist) :: my_nml
@@ -1154,6 +1160,7 @@ IF (mype == 0) THEN
   my_nml % l_limit_canhc   = l_limit_canhc
   my_nml % l_sugar         = l_sugar
   my_nml % l_red           = l_red
+  my_nml % l_resp_nocturnal = l_resp_nocturnal
 END IF
 
 CALL mpl_bcast(my_nml,1,mpl_nml_type,0,my_comm,icode)
@@ -1217,6 +1224,7 @@ IF (mype /= 0) THEN
   l_limit_canhc   = my_nml % l_limit_canhc
   l_sugar         = my_nml % l_sugar
   l_red           = my_nml % l_red
+  l_resp_nocturnal = my_nml % l_resp_nocturnal
 END IF
 
 CALL mpl_type_free(mpl_nml_type,icode)
