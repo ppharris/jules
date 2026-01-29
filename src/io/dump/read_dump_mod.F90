@@ -207,7 +207,8 @@ DO i = 1,nvars
     CASE ( 'toppdm%sthzw_soilt', 'toppdm%zw_soilt' )
       CALL file_read_var(FILE, var_ids(i), global_data_2d(:,1:nsoilt))
 
-    CASE ( 'canht', 'lai', 'years_since_harvest' , 'f_nsc' )
+    CASE ( 'canht', 'lai', 'years_since_harvest' , 'f_nsc' ,                   &
+           'tstar_ref', 'resp_ref', 'resp_fac' )
       CALL file_read_var(FILE, var_ids(i), global_data_2d(:,1:npft))
 
     CASE ( 'plantNumDensity' )
@@ -541,6 +542,21 @@ DO i = 1,nvars
   CASE ( 'f_nsc' )
     DO n = 1,npft
       CALL scatter_land_field(global_data_2d(:,n), progs%f_nsc_pft(:,n))
+    END DO
+
+  CASE ( 'tstar_ref' )
+    DO n = 1,npft
+      CALL scatter_land_field(global_data_2d(:,n), progs%tstar_ref_pft(:,n))
+    END DO
+
+  CASE ( 'resp_ref' )
+    DO n = 1,npft
+      CALL scatter_land_field(global_data_2d(:,n), progs%resp_ref_pft(:,n))
+    END DO
+
+  CASE ( 'resp_fac' )
+    DO n = 1,npft
+      CALL scatter_land_field(global_data_2d(:,n), progs%resp_fac_pft(:,n))
     END DO
 
   CASE ( 'plantNumDensity' )

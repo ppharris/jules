@@ -27,7 +27,7 @@ SUBROUTINE physiol (                                                           &
   canhc_surft,vfrac_surft,emis_surft,l_emis_surft_set,emis_soil,flake,         &
   g_leaf,gs,gc_surft,gc_stom_surft,gc_corr,gpp,gpp_pft,npp,npp_pft,            &
   resp_p,resp_p_pft,resp_s_soilt,resp_l_pft,                                   &
-  resp_r_pft,resp_w_pft,n_leaf,                                                &
+  resp_r_pft,resp_w_pft,tstar_ref_pft,resp_ref_pft,resp_fac_pft,n_leaf,        &
   n_root,n_stem,lai_bal,                                                       &
   smc_soilt,wt_ext_surft,fsmc_pft,                                             &
   albsoil_soilt,cos_zenith_angle,                                              &
@@ -329,6 +329,9 @@ REAL(KIND=real_jlslsm), INTENT(IN) :: dvi_cpft(land_pts,ncpft)
 !Fluxes
 REAL(KIND=real_jlslsm), INTENT(IN) :: t_home_gb(land_pts)
 REAL(KIND=real_jlslsm), INTENT(IN) :: t_growth_gb(land_pts)
+REAL(KIND=real_jlslsm), INTENT(IN OUT) :: tstar_ref_pft(land_pts,npft)
+REAL(KIND=real_jlslsm), INTENT(IN OUT) :: resp_ref_pft(land_pts,npft)
+REAL(KIND=real_jlslsm), INTENT(IN OUT) :: resp_fac_pft(land_pts,npft)
 
 !bvoc_vars
 REAL(KIND=real_jlslsm), INTENT(OUT) :: isoprene_gb(land_pts)
@@ -1134,6 +1137,7 @@ DO n = 1,npft
 ,               psi_root_zone_pft(:,n),lwp_c_pft(:,n)                          &
 ,               gpp_pft(:,n),npp_pft(:,n),resp_p_pft(:,n)                      &
 ,               resp_l_pft(:,n),resp_r_pft(:,n),resp_w_pft(:,n)                &
+,               tstar_ref_pft(:,n),resp_ref_pft(:,n),resp_fac_pft(:,n)         &
 ,               growth_sug_pft(:,n),f_nsc_pft(:,n)                             &
 ,               n_leaf(:,n),n_root(:,n),n_stem(:,n)                            &
 ,               lai_bal(:,n)                                                   &

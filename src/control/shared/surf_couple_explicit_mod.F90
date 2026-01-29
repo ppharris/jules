@@ -610,6 +610,8 @@ CASE ( jules )
     !New arguments replacing USE statements
     ! Prognostics (IN)
     progs%t_home_gb, progs%t_growth_gb,                                        &
+    ! Prognostics (IN OUT)
+    progs%tstar_ref_pft, progs%resp_ref_pft, progs%resp_fac_pft,               &
     !urban_param (IN)
     urban_param%emisr_gb, urban_param%emisw_gb, urban_param%hwr_gb,            &
     !jules_vars_mod (IN OUT)

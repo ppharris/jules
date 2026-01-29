@@ -43,6 +43,7 @@ SUBROUTINE sf_stom  (land_pts,land_index                                       &
 ,                    can_rad_mod,ilayers,faparv                                &
 ,                    psi_root_zone,lwp_c                                       &
 ,                    gpp,npp,resp_p,resp_l,resp_r,resp_w                       &
+,                    tstar_ref,resp_ref,resp_fac                               &
 ,                    growth_sug, f_nsc                                         &
 ,                    n_leaf,n_root,n_stem,lai_bal,gc                           &
 ,                    fapar_sun,fapar_shd,fsun                                  &
@@ -72,7 +73,7 @@ USE jules_vegetation_mod, ONLY:                                                &
     dsj_coef, dsv_coef, jv25_coef, act_j_coef, act_v_coef,                     &
     l_bvoc_emis, l_fapar_diag, l_trait_phys, l_stem_resp_fix, l_o3_damage,     &
     l_scale_resp_pm, photo_acclim_model, photo_model, stomata_model, l_sugar,  &
-    l_red
+    l_red, l_resp_nocturnal
 
 USE CN_utils_mod, ONLY:                                                        &
 ! imported procedures
@@ -110,6 +111,9 @@ USE ereport_mod, ONLY: ereport
 USE veg3_field_mod, ONLY: veg_state_type
 
 USE sugar_mod, ONLY: sugar
+
+
+USE circadian_mod, ONLY : tdq10_factor, update_resp_nocturnal
 
 IMPLICIT NONE
 
@@ -230,9 +234,19 @@ REAL(KIND=real_jlslsm), INTENT(IN OUT) ::                                      &
  gc(land_pts)                                                                  &
                             ! INOUT Canopy resistance to H2O (m/s).
                             ! The input value is only used if can_rad_mod=1.
-,f_nsc(land_pts)
+,f_nsc(land_pts)                                                               &
                             ! INOUT Non-structural carbohydrate mass fraction
                             !      (kgC/kgC)
+,tstar_ref(land_pts)                                                           &
+!                           ! INOUT Reference temperature for nocturnal leaf
+!                           ! dark respiration (K).
+,resp_ref(land_pts)                                                            &
+!                           ! INOUT Reference plant respiration rate
+!                           ! (kg C/m2/sec).
+,resp_fac(land_pts)
+!                           ! INOUT Plant respiration nocturnal state
+!                           ! (dimensionless).
+
 
 ! BVOC variables
 REAL(KIND=real_jlslsm), INTENT(OUT) ::                                         &
@@ -473,6 +487,8 @@ REAL(KIND=real_jlslsm) ::                                                      &
    ! Michaelis-Menten constant for O2 (Pa).
 ,jmax_temp(land_pts)                                                           &
    ! Factor expressing the effect of temperature on Jmax.
+,qtenf_resp(land_pts)                                                          &
+   ! Q10 temperature term used for dark respiration.
 ,qtenf_term(land_pts)                                                          &
    ! Q10 temperature term used for Vcmax.
 ,vcmax_temp(land_pts)                                                          &
@@ -711,7 +727,7 @@ END IF
 !$OMP        can_rad_mod, fpar, icr, kpar, lai, ft, apar, omega, ipar,         &
 !$OMP        l_trait_phys, nnpft, dvi_cpft, nleaf_top, nmass, nl0,             &
 !$OMP        dlai, ilayers, o3mol, o3, pstar, tstar, lma, ca, stomata_model,   &
-!$OMP        dq_min, c3, oa)
+!$OMP        dq_min, c3, oa, l_resp_nocturnal, qtenf_resp)
 IF ( l_co2_interactive ) THEN
   !       Use full 3D CO2 field.
 !$OMP  DO SCHEDULE(STATIC)
@@ -840,6 +856,20 @@ DO m  = 1,veg_pts
   ca(l) = co2c(l) / epco2 * pstar(l)
 END DO
 !$OMP END DO
+
+!-----------------------------------------------------------------------------
+! Calculate a temperature-dependent Q10 adjustment used for leaf dark
+! respiration.  The leaf-level adjustment is relative to a fixed reference
+! temperature (typically 25 degC).
+!-----------------------------------------------------------------------------
+IF ( l_resp_nocturnal ) THEN
+!$OMP DO SCHEDULE(STATIC)
+  DO m  = 1,veg_pts
+    l = veg_index(m)
+    qtenf_resp(l) = tdq10_factor(tstar(l), t_ref)
+  END DO
+!$OMP END DO
+END IF
 !$OMP END PARALLEL
 
 !-----------------------------------------------------------------------------
@@ -1027,7 +1057,7 @@ CASE ( 4 )
     !-------------------------------------------------------------------------
     CALL calc_photo_parameters( ft, land_pts, pft_photo_model, veg_pts,        &
                                 veg_index, denom, jmax_temp, jv25,             &
-                                nleaf_layer, qtenf_term, vcmax_temp,           &
+                                nleaf_layer, qtenf_resp, qtenf_term, vcmax_temp, &
                                 jmax, rd_dark, vcmax )
 
     !-------------------------------------------------------------------------
@@ -1147,7 +1177,7 @@ CASE ( 5, 6 )
     !-------------------------------------------------------------------------
     CALL calc_photo_parameters( ft, land_pts, pft_photo_model, veg_pts,        &
                                 veg_index, denom, jmax_temp, jv25,             &
-                                nleaf_layer, qtenf_term, vcmax_temp,           &
+                                nleaf_layer, qtenf_resp, qtenf_term, vcmax_temp,&
                                 jmax, rd_dark, vcmax )
 
     IF ( pft_photo_model == photo_farquhar ) THEN
@@ -1357,7 +1387,7 @@ CASE ( 1 )
   !---------------------------------------------------------------------------
   CALL calc_photo_parameters( ft, land_pts, pft_photo_model, veg_pts,          &
                               veg_index, denom, jmax_temp, jv25,               &
-                              nleaf_top, qtenf_term, vcmax_temp,               &
+                              nleaf_top, qtenf_resp, qtenf_term, vcmax_temp,   &
                               jmax, rd, vcmax )
 
   IF ( pft_photo_model == photo_farquhar ) THEN
@@ -1614,6 +1644,14 @@ DO m = 1,veg_pts
   END IF !l_sugar
 
   !---------------------------------------------------------------------------
+  ! Apply nocturnal respiration adjustments from Bruhn et al (2022).
+  !---------------------------------------------------------------------------
+  IF ( l_resp_nocturnal ) THEN
+    CALL update_resp_nocturnal(ipar(l), tstar(l), tstar_ref(l), resp_ref(l),   &
+                               resp_fac(l), resp_p(l))
+  END IF
+
+  !---------------------------------------------------------------------------
   ! Calculate Net Primary Productivity
   !---------------------------------------------------------------------------
   npp(l)      = gpp(l) - resp_p(l)
@@ -1712,7 +1750,7 @@ END SUBROUTINE sf_stom
 
 SUBROUTINE calc_photo_parameters( ft, land_pts, pft_photo_model, veg_pts,      &
                                   veg_index, denom, jmax_temp, jv25,           &
-                                  nleaf, qtenf_term, vcmax_temp,               &
+                                  nleaf, qtenf_resp, qtenf_term, vcmax_temp,   &
                                   jmax, rd_dark, vcmax )
 
 ! Calculate the maximum rates of carboxylation of Rubisco and electron
@@ -1720,7 +1758,7 @@ SUBROUTINE calc_photo_parameters( ft, land_pts, pft_photo_model, veg_pts,      &
 
 USE jules_vegetation_mod, ONLY:                                                &
 ! imported parameters
-    jv_ntotal, jv_scale, photo_collatz, photo_farquhar,                        &
+    jv_ntotal, jv_scale, photo_collatz, photo_farquhar, l_resp_nocturnal,      &
 ! imported scalars that are not changed
     n_alloc_jmax, n_alloc_vcmax, l_trait_phys, photo_jv_model
 
@@ -1758,6 +1796,8 @@ REAL(KIND=real_jlslsm), INTENT(IN) ::                                          &
   nleaf(land_pts),                                                             &
     ! Leaf nitrogen concentration.
     ! If l_trait_phys = (kg N m-2),  else = (kgN [kgC]-1).
+  qtenf_resp(land_pts),                                                        &
+   ! Q10 temperature term used for dark respiration with the Collatz model.
   qtenf_term(land_pts),                                                        &
    ! Q10 temperature term used for Vcmax with the Collatz model.
   vcmax_temp(land_pts)
@@ -1825,8 +1865,9 @@ END IF
 !$OMP PRIVATE(l, m, n_total)                                                   &
 !$OMP SHARED(ft, pft_photo_model, photo_jv_model, veg_index, veg_pts,          &
 !$OMP        denom, fd, jmax, jmax_temp, jv25, jv25_ratio, neff, nleaf,        &
-!$OMP        qtenf_term, rd_dark, recip_j, recip_v, vcmax, vcmax_ref,          &
-!$OMP        vcmax_temp, vint, vsl, l_trait_phys )
+!$OMP        qtenf_resp, qtenf_term, rd_dark, recip_j, recip_v,                &
+!$OMP        vcmax, vcmax_ref, vcmax_temp, vint, vsl,                          &
+!$OMP        l_trait_phys, l_resp_nocturnal )
 
 !$OMP DO SCHEDULE(STATIC)
 DO m = 1,veg_pts
@@ -1924,7 +1965,13 @@ END SELECT  !  pft_photo_model
 !$OMP DO SCHEDULE(STATIC)
 DO m = 1,veg_pts
   l = veg_index(m)
-  rd_dark(l) = fd(ft) * vcmax(l)
+
+  IF( l_resp_nocturnal ) THEN
+    rd_dark(l) = fd(ft) * vcmax_ref(l) * qtenf_resp(l)
+  ELSE
+    rd_dark(l) = fd(ft) * vcmax(l)
+  END IF
+
 END DO
 !$OMP END DO NOWAIT
 !$OMP END PARALLEL

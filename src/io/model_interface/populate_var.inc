@@ -1947,6 +1947,30 @@ CASE ( 'f_nsc' )
     progs%f_nsc_pft(:,:) = const_val
   END IF
 
+CASE ( 'tstar_ref' )
+  IF ( PRESENT(cube) ) THEN
+    cube_land = map_to_land(cube)
+    CALL cube_get_data(cube_land, progs%tstar_ref_pft(:,:))
+  ELSE
+    progs%tstar_ref_pft(:,:) = const_val
+  END IF
+
+CASE ( 'resp_ref' )
+  IF ( PRESENT(cube) ) THEN
+    cube_land = map_to_land(cube)
+    CALL cube_get_data(cube_land, progs%resp_ref_pft(:,:))
+  ELSE
+    progs%resp_ref_pft(:,:) = const_val
+  END IF
+
+CASE ( 'resp_fac' )
+  IF ( PRESENT(cube) ) THEN
+    cube_land = map_to_land(cube)
+    CALL cube_get_data(cube_land, progs%resp_fac_pft(:,:))
+  ELSE
+    progs%resp_fac_pft(:,:) = const_val
+  END IF
+
   !-----------------------------------------------------------------------------
   ! Forcing variables
   !-----------------------------------------------------------------------------

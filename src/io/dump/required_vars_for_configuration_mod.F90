@@ -36,7 +36,8 @@ USE jules_vegetation_mod, ONLY: can_model, can_rad_mod,                        &
                                 l_nitrogen, l_prescsow, l_trif_crop,           &
                                 photo_acclim_model, photo_adapt,               &
                                 photo_acclim, photo_adapt_acclim,              &
-                                l_croprotate, l_trif_biocrop, l_sugar, l_red
+                                l_croprotate, l_trif_biocrop, l_sugar, l_red,  &
+                                l_resp_nocturnal
 
 USE jules_water_resources_mod, ONLY: l_water_irrigation, l_water_resources,    &
        nwater_use, partition_ancil, partition_method, use_environment
@@ -272,6 +273,14 @@ END IF
 IF ( l_sugar ) THEN
   ! With SUGAR on, NSC mass fraction is prognostic for all PFTs
   CALL add_to_list( 'f_nsc', nvars, identifiers )
+END IF
+
+IF ( l_resp_nocturnal ) THEN
+  ! With Bruhn respiration, reference temperature and respiration rate,
+  ! and respiration state factor are prognostic for all PFTs.
+  CALL add_to_list( 'tstar_ref', nvars, identifiers )
+  CALL add_to_list( 'resp_ref', nvars, identifiers )
+  CALL add_to_list( 'resp_fac', nvars, identifiers )
 END IF
 
 ! TOPMODEL variables.
