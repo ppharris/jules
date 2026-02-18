@@ -56,6 +56,7 @@ SUBROUTINE sf_stom  (land_pts,land_index                                       &
 USE leaf_mod, ONLY: leaf
 USE leaf_limits_mod, ONLY: leaf_limits
 USE leaf_processes_sox_mod, ONLY: leaf_processes_sox
+USE leaf_rd_inhibit_mod, ONLY: leaf_rd_inhibit
 USE bvoc_emissions_mod, ONLY: bvoc_emissions
 
 USE conversions_mod, ONLY: zerodegc
@@ -1076,8 +1077,8 @@ CASE ( 4 )
       ! Apply inhibition of leaf dark respiration in daylight.
       !-----------------------------------------------------------------------
       IF ( l_can_rinhibit ) THEN
-        CALL leaf_rd_inhibition(land_pts, veg_index, open_pts, open_index      &
-,                               acr, faparv_layer(:, n), rd)
+        CALL leaf_rd_inhibit(land_pts, veg_index, open_pts, open_index         &
+,                            acr, faparv_layer(:, n), rd)
       END IF
 
       !-----------------------------------------------------------------------
