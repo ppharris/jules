@@ -571,6 +571,8 @@ REAL(KIND=jprb)               :: zhook_handle
 
 CHARACTER(LEN=*), PARAMETER :: RoutineName='SF_STOM'
 
+logical :: l_can_rinhibit = .true.
+
 IF (lhook) CALL dr_hook(ModuleName//':'//RoutineName,zhook_in,zhook_handle)
 
 !-----------------------------------------------------------------------------
@@ -1062,20 +1064,21 @@ CASE ( 4 )
 ,                       ci, wcarb, wexpt, wlite )
 
 !$OMP PARALLEL DO IF(open_pts > 1) DEFAULT(NONE) PRIVATE(l, m)                 &
-!$OMP             SHARED(acr, apar, faparv, faparv_layer, ipar, land_index,    &
-!$OMP                    n, open_index, open_pts, rd, t_i_length,              &
+!$OMP             SHARED(apar, faparv, ipar, n, open_index, open_pts,          &
 !$OMP                    wlite, wlitev, veg_index) SCHEDULE(STATIC)
       DO m = 1,open_pts
         l = veg_index(open_index(m))
         wlitev(l) = wlite(l) / apar(l) * faparv(l,n) * ipar(l)
-        ! Calculate light inhibition of dark respiration.
-        ! This does not change between iterations (though open_index might).
-        IF (acr(l) * 1.0e6 * faparv_layer(l,n) >  10.0) THEN
-          rd(l) = ( 0.5 - 0.05 * LOG(acr(l) * faparv_layer(l,n) * 1.0e6) )     &
-                  * rd(l)
-        END IF
       END DO
 !$OMP END PARALLEL DO
+
+      !-----------------------------------------------------------------------
+      ! Apply inhibition of leaf dark respiration in daylight.
+      !-----------------------------------------------------------------------
+      IF ( l_can_rinhibit ) THEN
+        CALL leaf_rd_inhibition(land_pts, veg_index, open_pts, open_index      &
+,                               acr, faparv_layer(:, n), rd)
+      END IF
 
       !-----------------------------------------------------------------------
       ! Calculate leaf-level fluxes.
