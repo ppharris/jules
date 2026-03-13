@@ -54,7 +54,8 @@ SUBROUTINE sf_stom  (land_pts,land_index                                       &
                     dvi_cpft,rootc_cpft)
 
 USE leaf_mod, ONLY: leaf
-USE leaf_limits_mod, ONLY: leaf_limits
+USE photosynthesis_collatz_mod, ONLY: leaf_limits_collatz
+USE photosynthesis_farquhar_mod, ONLY: leaf_limits_farquhar
 USE leaf_processes_sox_mod, ONLY: leaf_processes_sox
 USE bvoc_emissions_mod, ONLY: bvoc_emissions
 
@@ -1055,11 +1056,11 @@ CASE ( 4 )
       !-----------------------------------------------------------------------
       ! Calculate the limiting factors for leaf photosynthesis
       !-----------------------------------------------------------------------
-      CALL leaf_limits (ft, land_pts, pft_photo_model ,veg_pts, veg_index      &
-,                       acr, apar, ca, ccp, dqc, fsmc, je, kc, km, ko, oa      &
-,                       pstar, vcmax                                           &
-,                       clos_pts, open_pts, clos_index, open_index             &
-,                       ci, wcarb, wexpt, wlite )
+      CALL leaf_limits_collatz (ft, land_pts ,veg_pts, veg_index               &
+,                         acr, apar, ca, ccp, dqc, fsmc, kc, ko, oa            &
+,                         pstar, vcmax                                         &
+,                         clos_pts, open_pts, clos_index, open_index           &
+,                         ci, wcarb, wexpt, wlite )
 
 !$OMP PARALLEL DO IF(open_pts > 1) DEFAULT(NONE) PRIVATE(l, m)                 &
 !$OMP             SHARED(acr, apar, faparv, faparv_layer, ipar, land_index,    &
@@ -1225,14 +1226,20 @@ CASE ( 5, 6 )
 !$OMP END DO
 !$OMP END PARALLEL
 
-      !-----------------------------------------------------------------------
-      ! Calculate the limiting factors for leaf photosynthesis
-      !-----------------------------------------------------------------------
-      CALL leaf_limits (ft, land_pts, pft_photo_model, veg_pts, veg_index      &
-,                       acr, apar, ca, ccp, dqc, fsmc, je, kc, km, ko, oa      &
-,                       pstar, vcmax                                           &
-,                       clos_pts, open_pts, clos_index, open_index             &
-,                       ci, wcarb, wexpt, wlite)
+      SELECT CASE ( pft_photo_model )
+      CASE ( photo_collatz )
+        CALL leaf_limits_collatz (ft, land_pts ,veg_pts, veg_index             &
+,                         acr, apar, ca, ccp, dqc, fsmc, kc, ko, oa            &
+,                         pstar, vcmax                                         &
+,                         clos_pts, open_pts, clos_index, open_index           &
+,                         ci, wcarb, wexpt, wlite )
+      CASE ( photo_farquhar )
+        CALL leaf_limits_farquhar (ft, land_pts ,veg_pts, veg_index            &
+,                         apar, ca, ccp, dqc, fsmc, je, km                     &
+,                         pstar, vcmax                                         &
+,                         clos_pts, open_pts, clos_index, open_index           &
+,                         ci, wcarb, wlite )
+      END SELECT
 
 !$OMP PARALLEL IF(veg_pts > 1)                                                 &
 !$OMP DEFAULT(NONE)                                                            &
@@ -1396,11 +1403,11 @@ CASE ( 1 )
       !-----------------------------------------------------------------------
       ! Calculate the limiting factors for leaf photosynthesis.
       !-----------------------------------------------------------------------
-      CALL leaf_limits (ft, land_pts, pft_photo_model, veg_pts, veg_index      &
-,                       acr, apar, ca, ccp, dqc, fsmc, je, kc, km, ko, oa      &
-,                       pstar, vcmax                                           &
-,                       clos_pts, open_pts, clos_index, open_index             &
-,                       ci, wcarb, wexpt, wlite)
+      CALL leaf_limits_collatz (ft, land_pts ,veg_pts, veg_index               &
+,                         acr, apar, ca, ccp, dqc, fsmc, kc, ko, oa            &
+,                         pstar, vcmax                                         &
+,                         clos_pts, open_pts, clos_index, open_index           &
+,                         ci, wcarb, wexpt, wlite )
 
       !-----------------------------------------------------------------------
       ! Calculate leaf-level fluxes.
