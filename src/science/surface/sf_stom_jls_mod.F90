@@ -1056,7 +1056,7 @@ CASE ( 4 )
       !-----------------------------------------------------------------------
       ! Calculate the limiting factors for leaf photosynthesis
       !-----------------------------------------------------------------------
-      CALL leaf_limits_collatz (ft, land_pts ,veg_pts, veg_index               &
+      CALL leaf_limits_collatz (ft, land_pts, veg_pts, veg_index               &
 ,                         acr, apar, ca, ccp, dqc, fsmc, kc, ko, oa            &
 ,                         pstar, vcmax                                         &
 ,                         clos_pts, open_pts, clos_index, open_index           &
@@ -1228,13 +1228,13 @@ CASE ( 5, 6 )
 
       SELECT CASE ( pft_photo_model )
       CASE ( photo_collatz )
-        CALL leaf_limits_collatz (ft, land_pts ,veg_pts, veg_index             &
+        CALL leaf_limits_collatz (ft, land_pts, veg_pts, veg_index             &
 ,                         acr, apar, ca, ccp, dqc, fsmc, kc, ko, oa            &
 ,                         pstar, vcmax                                         &
 ,                         clos_pts, open_pts, clos_index, open_index           &
 ,                         ci, wcarb, wexpt, wlite )
       CASE ( photo_farquhar )
-        CALL leaf_limits_farquhar (ft, land_pts ,veg_pts, veg_index            &
+        CALL leaf_limits_farquhar (ft, land_pts, veg_pts, veg_index            &
 ,                         apar, ca, ccp, dqc, fsmc, je, km                     &
 ,                         pstar, vcmax                                         &
 ,                         clos_pts, open_pts, clos_index, open_index           &
@@ -1403,7 +1403,7 @@ CASE ( 1 )
       !-----------------------------------------------------------------------
       ! Calculate the limiting factors for leaf photosynthesis.
       !-----------------------------------------------------------------------
-      CALL leaf_limits_collatz (ft, land_pts ,veg_pts, veg_index               &
+      CALL leaf_limits_collatz (ft, land_pts, veg_pts, veg_index               &
 ,                         acr, apar, ca, ccp, dqc, fsmc, kc, ko, oa            &
 ,                         pstar, vcmax                                         &
 ,                         clos_pts, open_pts, clos_index, open_index           &
