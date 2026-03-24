@@ -221,4 +221,97 @@ END DO
 IF (lhook) CALL dr_hook(ModuleName//':'//RoutineName,zhook_out,zhook_handle)
 RETURN
 END SUBROUTINE leaf_limits_farquhar
+
+!#############################################################################
+!#############################################################################
+
+SUBROUTINE calc_electron_flux( land_pts, veg_pts, veg_index, i2, jmax, je )
+
+! Calculate the electron flux for the Farquhar model.
+
+USE parkind1, ONLY: jprb, jpim
+USE yomhook, ONLY: lhook, dr_hook
+
+USE um_types, ONLY: real_jlslsm
+
+IMPLICIT NONE
+
+!-----------------------------------------------------------------------------
+! Arguments with INTENT(IN).
+!-----------------------------------------------------------------------------
+INTEGER,INTENT(IN) ::                                                          &
+  land_pts,                                                                    &
+    ! Number of land points.
+  veg_pts,                                                                     &
+    ! Number of vegetated points.
+  veg_index(land_pts)
+    ! Index of vegetated points on the land grid.
+
+REAL(KIND=real_jlslsm), INTENT(IN) ::                                          &
+  i2(land_pts),                                                                &
+    ! Radiation that goes to Photosystem II, expressed as an electron flux
+    ! (mol m-2 s-1).
+  jmax(land_pts)
+    ! Maximum rate of electron transport (mol CO2 m-2 s-1).
+
+!-----------------------------------------------------------------------------
+! Arguments with INTENT(OUT).
+!-----------------------------------------------------------------------------
+REAL(KIND=real_jlslsm), INTENT(OUT) ::                                         &
+  je(land_pts)
+    ! Electron transport rate (mol m-2 s-1).
+
+!-----------------------------------------------------------------------------
+! Local parameters.
+!-----------------------------------------------------------------------------
+REAL(KIND=real_jlslsm), PARAMETER ::                                           &
+  light_curvature = 0.90
+    ! Curvature of the light response function. Used with Farquhar model of
+    ! photosynthesis. See Eq.4 of Medlyn et al. (2002).
+
+!-----------------------------------------------------------------------------
+! Local variables.
+!-----------------------------------------------------------------------------
+INTEGER ::                                                                     &
+  l, m
+    ! Indices.
+
+REAL(KIND=real_jlslsm) ::                                                      &
+ recip_denom
+   ! The reciprocal of the denominator.
+
+
+INTEGER(KIND=jpim), PARAMETER :: zhook_in  = 0
+INTEGER(KIND=jpim), PARAMETER :: zhook_out = 1
+REAL(KIND=jprb)               :: zhook_handle
+
+CHARACTER(LEN=*), PARAMETER :: RoutineName='CALC_ELECTRON_FLUX'
+
+!-----------------------------------------------------------------------------
+!end of header
+
+IF (lhook) CALL dr_hook(ModuleName//':'//RoutineName,zhook_in,zhook_handle)
+
+!-----------------------------------------------------------------------------
+! Calculate a constant.
+!-----------------------------------------------------------------------------
+recip_denom = 1.0 / ( 2.0 * light_curvature )
+
+!-----------------------------------------------------------------------------
+! Calculate electron flux by finding a root of a quadratic equation.
+! This is the solution of Eq.4 of Medlyn et al. (2002).
+!-----------------------------------------------------------------------------
+DO m = 1,veg_pts
+  l = veg_index(m)
+  je(l)  = ( i2(l) + jmax(l)                                                   &
+                    - SQRT( ( i2(l) + jmax(l) )**2                             &
+                            - 4.0 * light_curvature * i2(l) * jmax(l) )        &
+           ) * recip_denom
+END DO
+
+IF (lhook) CALL dr_hook(ModuleName//':'//RoutineName,zhook_out,zhook_handle)
+RETURN
+
+END SUBROUTINE calc_electron_flux
+
 END MODULE photosynthesis_farquhar_mod
