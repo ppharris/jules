@@ -54,9 +54,10 @@ SUBROUTINE sf_stom  (land_pts,land_index                                       &
                     dvi_cpft,rootc_cpft)
 
 USE leaf_mod, ONLY: leaf
-USE photosynthesis_collatz_mod, ONLY: leaf_limits_collatz
+USE photosynthesis_collatz_mod, ONLY:                                          &
+     leaf_limits_collatz, calc_photo_collatz
 USE photosynthesis_farquhar_mod, ONLY:                                         &
-    leaf_limits_farquhar, calc_electron_flux
+    leaf_limits_farquhar, calc_photo_farquhar, calc_electron_flux
 USE leaf_processes_sox_mod, ONLY: leaf_processes_sox
 USE bvoc_emissions_mod, ONLY: bvoc_emissions
 
@@ -1027,10 +1028,9 @@ CASE ( 4 )
     !-------------------------------------------------------------------------
     ! Calculate photosynthetic parameters.
     !-------------------------------------------------------------------------
-    CALL calc_photo_parameters( ft, land_pts, pft_photo_model, veg_pts,        &
-                                veg_index, denom, jmax_temp, jv25,             &
-                                nleaf_layer, qtenf_term, vcmax_temp,           &
-                                jmax, rd_dark, vcmax )
+    CALL calc_photo_collatz( ft, land_pts, veg_pts, veg_index,                 &
+                             denom, nleaf_layer, qtenf_term, vcmax_temp,       &
+                             rd_dark, vcmax )
 
     !-------------------------------------------------------------------------
     ! Iterate to ensure that the canopy humidity deficit is consistent with
@@ -1147,12 +1147,16 @@ CASE ( 5, 6 )
     !-------------------------------------------------------------------------
     ! Calculate photosynthetic parameters.
     !-------------------------------------------------------------------------
-    CALL calc_photo_parameters( ft, land_pts, pft_photo_model, veg_pts,        &
-                                veg_index, denom, jmax_temp, jv25,             &
-                                nleaf_layer, qtenf_term, vcmax_temp,           &
+    SELECT CASE( pft_photo_model )
+    CASE( photo_collatz )
+      CALL calc_photo_collatz( ft, land_pts, veg_pts, veg_index,               &
+                               denom, nleaf_layer, qtenf_term, vcmax_temp,     &
+                               rd_dark, vcmax )
+    CASE( photo_farquhar )
+      CALL calc_photo_farquhar( ft, land_pts, veg_pts, veg_index,              &
+                                jmax_temp, jv25, nleaf_layer, vcmax_temp,      &
                                 jmax, rd_dark, vcmax )
 
-    IF ( pft_photo_model == photo_farquhar ) THEN
       !-----------------------------------------------------------------------
       ! Calculate sunlit and shaded radiation terms.
       !-----------------------------------------------------------------------
@@ -1199,7 +1203,7 @@ CASE ( 5, 6 )
       END DO
 !$OMP END PARALLEL DO
 
-    END IF  !  pft_photo_model
+    END SELECT  !  pft_photo_model
 
     !-------------------------------------------------------------------------
     ! Iterate to ensure that the canopy humidity deficit is consistent with
@@ -1363,15 +1367,17 @@ CASE ( 1 )
   ! Calculate photosynthetic parameters.
   ! There is no light limitation of dark respiration in this case.
   !---------------------------------------------------------------------------
-  CALL calc_photo_parameters( ft, land_pts, pft_photo_model, veg_pts,          &
-                              veg_index, denom, jmax_temp, jv25,               &
-                              nleaf_top, qtenf_term, vcmax_temp,               &
+  SELECT CASE ( pft_photo_model )
+  CASE ( photo_collatz )
+    CALL calc_photo_collatz( ft, land_pts, veg_pts, veg_index,                 &
+                             denom, nleaf_top, qtenf_term, vcmax_temp,         &
+                             rd, vcmax )
+  CASE ( photo_farquhar )
+    CALL calc_photo_farquhar( ft, land_pts, veg_pts, veg_index,                &
+                              jmax_temp, jv25, nleaf_top, vcmax_temp,          &
                               jmax, rd, vcmax )
-
-  IF ( pft_photo_model == photo_farquhar ) THEN
-    ! Calculate the electron flux.
     CALL calc_electron_flux( land_pts, veg_pts, veg_index, i2, jmax, je)
-  END IF
+  END SELECT
 
   !---------------------------------------------------------------------------
   ! Iterate to ensure that the canopy humidity deficit is consistent with the
@@ -1714,232 +1720,5 @@ END IF
 IF (lhook) CALL dr_hook(ModuleName//':'//RoutineName,zhook_out,zhook_handle)
 RETURN
 END SUBROUTINE sf_stom
-
-!#############################################################################
-!#############################################################################
-
-SUBROUTINE calc_photo_parameters( ft, land_pts, pft_photo_model, veg_pts,      &
-                                  veg_index, denom, jmax_temp, jv25,           &
-                                  nleaf, qtenf_term, vcmax_temp,               &
-                                  jmax, rd_dark, vcmax )
-
-! Calculate the maximum rates of carboxylation of Rubisco and electron
-! transport, and dark respiration without light inhibition.
-
-USE jules_vegetation_mod, ONLY:                                                &
-! imported parameters
-    jv_ntotal, jv_scale, photo_collatz, photo_farquhar,                        &
-! imported scalars that are not changed
-    n_alloc_jmax, n_alloc_vcmax, l_trait_phys, photo_jv_model
-
-USE pftparm, ONLY: fd, jv25_ratio, neff, vint, vsl
-
-USE parkind1, ONLY: jprb, jpim
-USE yomhook, ONLY: lhook, dr_hook
-
-IMPLICIT NONE
-
-!-----------------------------------------------------------------------------
-! Arguments with INTENT(IN).
-!-----------------------------------------------------------------------------
-INTEGER,INTENT(IN) ::                                                          &
-  ft,                                                                          &
-    ! Index of plant functional type.
-  land_pts,                                                                    &
-    ! Number of land points.
-  pft_photo_model,                                                             &
-    ! Indicates which photosynthesis model to use for the current PFT.
-  veg_pts,                                                                     &
-    ! Number of vegetated points.
-  veg_index(land_pts)
-    ! Index of vegetated points on the land grid.
-
-REAL(KIND=real_jlslsm), INTENT(IN) ::                                          &
-  denom(land_pts),                                                             &
-    ! Denominator in equation for Vcmax with the Collatz model.
-  jmax_temp(land_pts),                                                         &
-    ! Factor expressing the effect of temperature on Jmax.
-    ! Only used with the Farquhar model.
-  jv25(land_pts),                                                              &
-    ! Ratio of Jmax to Vcmax at 25 degC, including any acclimation.
-    ! Only used with the Farquhar model.
-  nleaf(land_pts),                                                             &
-    ! Leaf nitrogen concentration.
-    ! If l_trait_phys = (kg N m-2),  else = (kgN [kgC]-1).
-  qtenf_term(land_pts),                                                        &
-   ! Q10 temperature term used for Vcmax with the Collatz model.
-  vcmax_temp(land_pts)
-    ! Factor expressing the effect of temperature on Vcmax.
-    ! Only used with the Farquhar model.
-
-!-----------------------------------------------------------------------------
-! Arguments with INTENT(OUT).
-!-----------------------------------------------------------------------------
-REAL(KIND=real_jlslsm), INTENT(OUT) ::                                         &
-  jmax(land_pts),                                                              &
-    ! Maximum rate of electron transport (mol CO2 m-2 s-1).
-    ! Only calculated with the Farquhar model.
-  rd_dark(land_pts),                                                           &
-    ! Dark respiration before light inhibition (mol CO2/m2/s).
-  vcmax(land_pts)
-    ! Maximum rate of carboxylation of Rubisco (mol CO2/m2/s).
-
-!-----------------------------------------------------------------------------
-! Local scalar variables.
-!-----------------------------------------------------------------------------
-INTEGER ::                                                                     &
-  l, m
-    ! Indices.
-
-REAL(KIND=real_jlslsm) ::                                                      &
-  n_total,                                                                     &
-    ! Total N allocated to photosynthetic components (kg m-2).
-  recip_j,                                                                     &
-    ! Reciprocal of n_alloc_jmax (kg m-2 of N [mol CO2 m-2 s-1]).
-  recip_v
-    ! Reciprocal of n_alloc_vcmax (kg m-2 of N [mol CO2 m-2 s-1]).
-
-!-----------------------------------------------------------------------------
-! Local array variables.
-!-----------------------------------------------------------------------------
-REAL ::                                                                        &
-  vcmax_ref(land_pts)
-    ! Maximum rate of carboxylation of Rubisco at the reference temperature,
-    ! ignoring the effects of acclimation and N allocation (mol CO2/m2/s).
-
-INTEGER(KIND=jpim), PARAMETER :: zhook_in  = 0
-INTEGER(KIND=jpim), PARAMETER :: zhook_out = 1
-REAL(KIND=jprb)               :: zhook_handle
-
-CHARACTER(LEN=*), PARAMETER :: RoutineName='CALC_PHOTO_PARAMETERS'
-
-!-----------------------------------------------------------------------------
-!end of header
-
-IF (lhook) CALL dr_hook(ModuleName//':'//RoutineName,zhook_in,zhook_handle)
-
-!-----------------------------------------------------------------------------
-! Calculate some constants.
-!-----------------------------------------------------------------------------
-IF ( photo_jv_model == jv_ntotal ) THEN
-  recip_j  = 1.0 / n_alloc_jmax
-  recip_v  = 1.0 / n_alloc_vcmax
-END IF
-
-!-----------------------------------------------------------------------------
-! Calculate Vcmax at the reference temperature, without any acclimation.
-!-----------------------------------------------------------------------------
-!$OMP PARALLEL IF(veg_pts > 1)  DEFAULT(NONE)                                  &
-!$OMP PRIVATE(l, m, n_total)                                                   &
-!$OMP SHARED(ft, pft_photo_model, photo_jv_model, veg_index, veg_pts,          &
-!$OMP        denom, fd, jmax, jmax_temp, jv25, jv25_ratio, neff, nleaf,        &
-!$OMP        qtenf_term, rd_dark, recip_j, recip_v, vcmax, vcmax_ref,          &
-!$OMP        vcmax_temp, vint, vsl, l_trait_phys )
-
-!$OMP DO SCHEDULE(STATIC)
-DO m = 1,veg_pts
-
-  l = veg_index(m)
-
-  IF (l_trait_phys) THEN
-    vcmax_ref(l) = (vsl(ft) * nleaf(l) + vint(ft)) * 1.0e-6  ! Kattge 2009
-  ELSE
-    vcmax_ref(l) = neff(ft) * nleaf(l)
-  END IF
-
-END DO
-!$OMP END DO NOWAIT
-
-!-----------------------------------------------------------------------------
-! Calculate Vcmax and Jmax.
-!-----------------------------------------------------------------------------
-SELECT CASE ( pft_photo_model )
-CASE ( photo_collatz )
-
-  !---------------------------------------------------------------------------
-  ! Use the Collatz model.
-  !---------------------------------------------------------------------------
-!$OMP DO SCHEDULE(STATIC)
-  DO m = 1,veg_pts
-    l = veg_index(m)
-    ! Using brackets here to recreate existing results.
-    vcmax(l) = ( vcmax_ref(l) * qtenf_term(l) ) / denom(l)
-  END DO
-!$OMP END DO NOWAIT
-
-CASE ( photo_farquhar )
-
-  !---------------------------------------------------------------------------
-  ! Use the Farquhar model (for C3 plants).
-  !---------------------------------------------------------------------------
-
-  !---------------------------------------------------------------------------
-  ! Calculate values at the reference temperature, including any acclimation
-  ! of jv25 (but excluding other acclimation terms).
-  !---------------------------------------------------------------------------
-  SELECT CASE ( photo_jv_model )
-
-  CASE ( jv_scale )
-    ! Find J25 by scaling V25.
-!$OMP DO SCHEDULE(STATIC)
-    DO m = 1,veg_pts
-      l = veg_index(m)
-      vcmax(l) = vcmax_ref(l)
-      jmax(l)  = vcmax_ref(l) * jv25(l)
-    END DO
-!$OMP END DO NOWAIT
-
-  CASE ( jv_ntotal )
-    ! Assume the total N allocated to photosynthetic capacity is constant.
-!$OMP DO SCHEDULE(STATIC)
-    DO m = 1,veg_pts
-      l = veg_index(m)
-      ! Calculate total N allocated to photosynthetic capacity, using the
-      ! prescribed parameters at the reference temperature.
-      ! This is Eq.5 of Mercado et al. (2018).
-      n_total = vcmax_ref(l) * recip_v                                         &
-                + vcmax_ref(l) * jv25_ratio(ft) * recip_j
-      ! Calculate Vcmax and Jmax at 25degC, including temperature acclimation
-      ! of J:V.
-      vcmax(l) = n_total / ( recip_v + jv25(l) * recip_j )
-      jmax(l)  = n_total / ( recip_v / jv25(l) + recip_j )
-    END DO
-!$OMP END DO NOWAIT
-
-  END SELECT  !  photo_jv_model
-
-  !---------------------------------------------------------------------------
-  ! Calculate final values, including temperature effect.
-  !---------------------------------------------------------------------------
-!$OMP DO SCHEDULE(STATIC)
-  DO m = 1,veg_pts
-    l = veg_index(m)
-
-    ! Calculate rates according to acclimated ratio and N allocation to
-    ! photosynthesis, and including temperature term.
-    ! At present neither acclimation nor N allocation are represented.
-    vcmax(l) = vcmax(l) * vcmax_temp(l)
-    jmax(l)  = jmax(l)  * jmax_temp(l)
-
-  END DO
-!$OMP END DO NOWAIT
-
-END SELECT  !  pft_photo_model
-
-!-----------------------------------------------------------------------------
-! Calculate dark respiration. Any effect of light inhibition is added later.
-!-----------------------------------------------------------------------------
-!$OMP DO SCHEDULE(STATIC)
-DO m = 1,veg_pts
-  l = veg_index(m)
-  rd_dark(l) = fd(ft) * vcmax(l)
-END DO
-!$OMP END DO NOWAIT
-!$OMP END PARALLEL
-
-IF (lhook) CALL dr_hook(ModuleName//':'//RoutineName,zhook_out,zhook_handle)
-RETURN
-
-END SUBROUTINE calc_photo_parameters
 
 END MODULE sf_stom_mod

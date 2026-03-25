@@ -222,6 +222,214 @@ IF (lhook) CALL dr_hook(ModuleName//':'//RoutineName,zhook_out,zhook_handle)
 RETURN
 END SUBROUTINE leaf_limits_farquhar
 
+
+
+!#############################################################################
+!#############################################################################
+
+SUBROUTINE calc_photo_farquhar( ft, land_pts, veg_pts, veg_index,              &
+                                jmax_temp, jv25, nleaf, vcmax_temp,            &
+                                jmax, rd_dark, vcmax )
+
+! Calculate the maximum rates of carboxylation of Rubisco and electron
+! transport, and dark respiration without light inhibition.
+
+USE jules_vegetation_mod, ONLY:                                                &
+! imported parameters
+    jv_ntotal, jv_scale,                                                       &
+! imported scalars that are not changed
+    n_alloc_jmax, n_alloc_vcmax, l_trait_phys, photo_jv_model
+
+USE pftparm, ONLY: fd, jv25_ratio, neff, vint, vsl
+
+USE parkind1, ONLY: jprb, jpim
+USE yomhook, ONLY: lhook, dr_hook
+
+USE um_types, ONLY: real_jlslsm
+
+IMPLICIT NONE
+
+!-----------------------------------------------------------------------------
+! Arguments with INTENT(IN).
+!-----------------------------------------------------------------------------
+INTEGER,INTENT(IN) ::                                                          &
+  ft,                                                                          &
+    ! Index of plant functional type.
+  land_pts,                                                                    &
+    ! Number of land points.
+  veg_pts,                                                                     &
+    ! Number of vegetated points.
+  veg_index(land_pts)
+    ! Index of vegetated points on the land grid.
+
+REAL(KIND=real_jlslsm), INTENT(IN) ::                                          &
+  jmax_temp(land_pts),                                                         &
+    ! Factor expressing the effect of temperature on Jmax.
+    ! Only used with the Farquhar model.
+  jv25(land_pts),                                                              &
+    ! Ratio of Jmax to Vcmax at 25 degC, including any acclimation.
+    ! Only used with the Farquhar model.
+  nleaf(land_pts),                                                             &
+    ! Leaf nitrogen concentration.
+    ! If l_trait_phys = (kg N m-2),  else = (kgN [kgC]-1).
+  vcmax_temp(land_pts)
+    ! Factor expressing the effect of temperature on Vcmax.
+    ! Only used with the Farquhar model.
+
+!-----------------------------------------------------------------------------
+! Arguments with INTENT(OUT).
+!-----------------------------------------------------------------------------
+REAL(KIND=real_jlslsm), INTENT(OUT) ::                                         &
+  jmax(land_pts),                                                              &
+    ! Maximum rate of electron transport (mol CO2 m-2 s-1).
+    ! Only calculated with the Farquhar model.
+  rd_dark(land_pts),                                                           &
+    ! Dark respiration before light inhibition (mol CO2/m2/s).
+  vcmax(land_pts)
+    ! Maximum rate of carboxylation of Rubisco (mol CO2/m2/s).
+
+!-----------------------------------------------------------------------------
+! Local scalar variables.
+!-----------------------------------------------------------------------------
+INTEGER ::                                                                     &
+  l, m
+    ! Indices.
+
+REAL(KIND=real_jlslsm) ::                                                      &
+  n_total,                                                                     &
+    ! Total N allocated to photosynthetic components (kg m-2).
+  recip_j,                                                                     &
+    ! Reciprocal of n_alloc_jmax (kg m-2 of N [mol CO2 m-2 s-1]).
+  recip_v
+    ! Reciprocal of n_alloc_vcmax (kg m-2 of N [mol CO2 m-2 s-1]).
+
+!-----------------------------------------------------------------------------
+! Local array variables.
+!-----------------------------------------------------------------------------
+REAL ::                                                                        &
+  vcmax_ref(land_pts)
+    ! Maximum rate of carboxylation of Rubisco at the reference temperature,
+    ! ignoring the effects of acclimation and N allocation (mol CO2/m2/s).
+
+INTEGER(KIND=jpim), PARAMETER :: zhook_in  = 0
+INTEGER(KIND=jpim), PARAMETER :: zhook_out = 1
+REAL(KIND=jprb)               :: zhook_handle
+
+CHARACTER(LEN=*), PARAMETER :: RoutineName='CALC_PHOTO_PARAMETERS'
+
+!-----------------------------------------------------------------------------
+!end of header
+
+IF (lhook) CALL dr_hook(ModuleName//':'//RoutineName,zhook_in,zhook_handle)
+
+!-----------------------------------------------------------------------------
+! Calculate some constants.
+!-----------------------------------------------------------------------------
+IF ( photo_jv_model == jv_ntotal ) THEN
+  recip_j  = 1.0 / n_alloc_jmax
+  recip_v  = 1.0 / n_alloc_vcmax
+END IF
+
+!-----------------------------------------------------------------------------
+! Calculate Vcmax at the reference temperature, without any acclimation.
+!-----------------------------------------------------------------------------
+!$OMP PARALLEL IF(veg_pts > 1)  DEFAULT(NONE)                                  &
+!$OMP PRIVATE(l, m, n_total)                                                   &
+!$OMP SHARED(ft, photo_jv_model, veg_index, veg_pts,                           &
+!$OMP        fd, jmax, jmax_temp, jv25, jv25_ratio, neff, nleaf,               &
+!$OMP        rd_dark, recip_j, recip_v, vcmax, vcmax_ref,                      &
+!$OMP        vcmax_temp, vint, vsl, l_trait_phys )
+
+!$OMP DO SCHEDULE(STATIC)
+DO m = 1,veg_pts
+
+  l = veg_index(m)
+
+  IF (l_trait_phys) THEN
+    vcmax_ref(l) = (vsl(ft) * nleaf(l) + vint(ft)) * 1.0e-6  ! Kattge 2009
+  ELSE
+    vcmax_ref(l) = neff(ft) * nleaf(l)
+  END IF
+
+END DO
+!$OMP END DO NOWAIT
+
+!-----------------------------------------------------------------------------
+! Calculate Vcmax and Jmax.
+!-----------------------------------------------------------------------------
+
+  !---------------------------------------------------------------------------
+  ! Use the Farquhar model (for C3 plants).
+  !---------------------------------------------------------------------------
+
+  !---------------------------------------------------------------------------
+  ! Calculate values at the reference temperature, including any acclimation
+  ! of jv25 (but excluding other acclimation terms).
+  !---------------------------------------------------------------------------
+  SELECT CASE ( photo_jv_model )
+
+  CASE ( jv_scale )
+    ! Find J25 by scaling V25.
+!$OMP DO SCHEDULE(STATIC)
+    DO m = 1,veg_pts
+      l = veg_index(m)
+      vcmax(l) = vcmax_ref(l)
+      jmax(l)  = vcmax_ref(l) * jv25(l)
+    END DO
+!$OMP END DO NOWAIT
+
+  CASE ( jv_ntotal )
+    ! Assume the total N allocated to photosynthetic capacity is constant.
+!$OMP DO SCHEDULE(STATIC)
+    DO m = 1,veg_pts
+      l = veg_index(m)
+      ! Calculate total N allocated to photosynthetic capacity, using the
+      ! prescribed parameters at the reference temperature.
+      ! This is Eq.5 of Mercado et al. (2018).
+      n_total = vcmax_ref(l) * recip_v                                         &
+                + vcmax_ref(l) * jv25_ratio(ft) * recip_j
+      ! Calculate Vcmax and Jmax at 25degC, including temperature acclimation
+      ! of J:V.
+      vcmax(l) = n_total / ( recip_v + jv25(l) * recip_j )
+      jmax(l)  = n_total / ( recip_v / jv25(l) + recip_j )
+    END DO
+!$OMP END DO NOWAIT
+
+  END SELECT  !  photo_jv_model
+
+  !---------------------------------------------------------------------------
+  ! Calculate final values, including temperature effect.
+  !---------------------------------------------------------------------------
+!$OMP DO SCHEDULE(STATIC)
+  DO m = 1,veg_pts
+    l = veg_index(m)
+
+    ! Calculate rates according to acclimated ratio and N allocation to
+    ! photosynthesis, and including temperature term.
+    ! At present neither acclimation nor N allocation are represented.
+    vcmax(l) = vcmax(l) * vcmax_temp(l)
+    jmax(l)  = jmax(l)  * jmax_temp(l)
+
+  END DO
+!$OMP END DO NOWAIT
+
+!-----------------------------------------------------------------------------
+! Calculate dark respiration. Any effect of light inhibition is added later.
+!-----------------------------------------------------------------------------
+!$OMP DO SCHEDULE(STATIC)
+DO m = 1,veg_pts
+  l = veg_index(m)
+  rd_dark(l) = fd(ft) * vcmax(l)
+END DO
+!$OMP END DO NOWAIT
+!$OMP END PARALLEL
+
+IF (lhook) CALL dr_hook(ModuleName//':'//RoutineName,zhook_out,zhook_handle)
+RETURN
+
+END SUBROUTINE calc_photo_farquhar
+
+
 !#############################################################################
 !#############################################################################
 

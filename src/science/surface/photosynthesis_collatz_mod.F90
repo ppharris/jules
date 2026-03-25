@@ -257,4 +257,140 @@ END DO
 IF (lhook) CALL dr_hook(ModuleName//':'//RoutineName,zhook_out,zhook_handle)
 RETURN
 END SUBROUTINE leaf_limits_collatz
+
+!#############################################################################
+!#############################################################################
+
+SUBROUTINE calc_photo_collatz( ft, land_pts, veg_pts, veg_index,               &
+                               denom, nleaf, qtenf_term, vcmax_temp,           &
+                               rd_dark, vcmax )
+
+! Calculate the maximum rates of carboxylation of Rubisco and dark
+! respiration without light inhibition.
+
+USE jules_vegetation_mod, ONLY:                                                &
+! imported scalars that are not changed
+    l_trait_phys
+
+USE pftparm, ONLY: fd, neff, vint, vsl
+
+USE parkind1, ONLY: jprb, jpim
+USE yomhook, ONLY: lhook, dr_hook
+
+USE um_types, ONLY: real_jlslsm
+
+IMPLICIT NONE
+
+!-----------------------------------------------------------------------------
+! Arguments with INTENT(IN).
+!-----------------------------------------------------------------------------
+INTEGER,INTENT(IN) ::                                                          &
+  ft,                                                                          &
+    ! Index of plant functional type.
+  land_pts,                                                                    &
+    ! Number of land points.
+  veg_pts,                                                                     &
+    ! Number of vegetated points.
+  veg_index(land_pts)
+    ! Index of vegetated points on the land grid.
+
+REAL(KIND=real_jlslsm), INTENT(IN) ::                                          &
+  denom(land_pts),                                                             &
+    ! Denominator in equation for Vcmax with the Collatz model.
+  nleaf(land_pts),                                                             &
+    ! Leaf nitrogen concentration.
+    ! If l_trait_phys = (kg N m-2),  else = (kgN [kgC]-1).
+  qtenf_term(land_pts),                                                        &
+   ! Q10 temperature term used for Vcmax with the Collatz model.
+  vcmax_temp(land_pts)
+    ! Factor expressing the effect of temperature on Vcmax.
+    ! Only used with the Farquhar model.
+
+!-----------------------------------------------------------------------------
+! Arguments with INTENT(OUT).
+!-----------------------------------------------------------------------------
+REAL(KIND=real_jlslsm), INTENT(OUT) ::                                         &
+  rd_dark(land_pts),                                                           &
+    ! Dark respiration before light inhibition (mol CO2/m2/s).
+  vcmax(land_pts)
+    ! Maximum rate of carboxylation of Rubisco (mol CO2/m2/s).
+
+!-----------------------------------------------------------------------------
+! Local scalar variables.
+!-----------------------------------------------------------------------------
+INTEGER ::                                                                     &
+  l, m
+    ! Indices.
+
+!-----------------------------------------------------------------------------
+! Local array variables.
+!-----------------------------------------------------------------------------
+REAL ::                                                                        &
+  vcmax_ref(land_pts)
+    ! Maximum rate of carboxylation of Rubisco at the reference temperature,
+    ! ignoring the effects of acclimation and N allocation (mol CO2/m2/s).
+
+INTEGER(KIND=jpim), PARAMETER :: zhook_in  = 0
+INTEGER(KIND=jpim), PARAMETER :: zhook_out = 1
+REAL(KIND=jprb)               :: zhook_handle
+
+CHARACTER(LEN=*), PARAMETER :: RoutineName='CALC_PHOTO_PARAMETERS'
+
+!-----------------------------------------------------------------------------
+!end of header
+
+IF (lhook) CALL dr_hook(ModuleName//':'//RoutineName,zhook_in,zhook_handle)
+
+!-----------------------------------------------------------------------------
+! Calculate Vcmax at the reference temperature, without any acclimation.
+!-----------------------------------------------------------------------------
+!$OMP PARALLEL IF(veg_pts > 1)  DEFAULT(NONE)                                  &
+!$OMP PRIVATE(l, m, n_total)                                                   &
+!$OMP SHARED(ft, veg_index, veg_pts, denom, fd, neff, nleaf, qtenf_term,       &
+!$OMP        rd_dark, vcmax, vcmax_ref, vint, vsl, l_trait_phys )
+
+!$OMP DO SCHEDULE(STATIC)
+DO m = 1,veg_pts
+
+  l = veg_index(m)
+
+  IF (l_trait_phys) THEN
+    vcmax_ref(l) = (vsl(ft) * nleaf(l) + vint(ft)) * 1.0e-6  ! Kattge 2009
+  ELSE
+    vcmax_ref(l) = neff(ft) * nleaf(l)
+  END IF
+
+END DO
+!$OMP END DO NOWAIT
+
+!-----------------------------------------------------------------------------
+! Calculate Vcmax.
+!-----------------------------------------------------------------------------
+  !---------------------------------------------------------------------------
+  ! Use the Collatz model.
+  !---------------------------------------------------------------------------
+!$OMP DO SCHEDULE(STATIC)
+  DO m = 1,veg_pts
+    l = veg_index(m)
+    ! Using brackets here to recreate existing results.
+    vcmax(l) = ( vcmax_ref(l) * qtenf_term(l) ) / denom(l)
+  END DO
+!$OMP END DO NOWAIT
+
+!-----------------------------------------------------------------------------
+! Calculate dark respiration. Any effect of light inhibition is added later.
+!-----------------------------------------------------------------------------
+!$OMP DO SCHEDULE(STATIC)
+DO m = 1,veg_pts
+  l = veg_index(m)
+  rd_dark(l) = fd(ft) * vcmax(l)
+END DO
+!$OMP END DO NOWAIT
+!$OMP END PARALLEL
+
+IF (lhook) CALL dr_hook(ModuleName//':'//RoutineName,zhook_out,zhook_handle)
+RETURN
+
+END SUBROUTINE calc_photo_collatz
+
 END MODULE photosynthesis_collatz_mod
