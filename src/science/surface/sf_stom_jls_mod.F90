@@ -62,7 +62,6 @@ USE photosynthesis_farquhar_mod, ONLY:                                         &
 USE leaf_processes_sox_mod, ONLY: leaf_processes_sox
 USE bvoc_emissions_mod, ONLY: bvoc_emissions
 
-USE conversions_mod, ONLY: zerodegc
 USE theta_field_sizes, ONLY: t_i_length
 
 USE jules_surface_types_mod, ONLY: nnpft, ncpft
@@ -70,10 +69,8 @@ USE jules_surface_types_mod, ONLY: nnpft, ncpft
 USE jules_vegetation_mod, ONLY:                                                &
 ! imported parameters
     photo_collatz, photo_farquhar, photo_sox_collatz, stomata_medlyn,          &
-    stomata_sox, photo_adapt, photo_acclim, photo_adapt_acclim,                &
-    photo_act_model, photo_act_pft, photo_act_gb, n_photo_coef,                &
+    stomata_sox,                                                               &
 ! imported scalars that are not changed
-    dsj_coef, dsv_coef, jv25_coef, act_j_coef, act_v_coef,                     &
     l_bvoc_emis, l_fapar_diag, l_trait_phys, l_stem_resp_fix, l_o3_damage,     &
     l_scale_resp_pm, photo_acclim_model, photo_model, stomata_model, l_sugar,  &
     l_red
@@ -84,10 +81,8 @@ USE CN_utils_mod, ONLY:                                                        &
 
 USE pftparm, ONLY:                                                             &
 ! imported arrays that are not changed
-    a_wl, a_ws, act_jmax, act_vcmax, alpha_elec, b_wl, c3, deact_jmax,         &
-    deact_vcmax, ds_jmax, ds_vcmax, eta_sl, kpar, nl0, nr_nl, ns_nl, omega,    &
-    r_grow, sigl, lma, nmass, kn, knl, tupp, tlow,  q10_leaf, nsw, nr, hw_sw,  &
-    jv25_ratio
+    a_wl, a_ws, b_wl, c3, eta_sl, kpar, nl0, nr_nl, ns_nl, omega,              &
+    r_grow, sigl, lma, nmass, kn, knl, nsw, nr, hw_sw
 
 USE ccarbon, ONLY:                                                             &
 ! imported scalar parameters
@@ -267,12 +262,8 @@ REAL(KIND=real_jlslsm), INTENT(IN) :: rootc_cpft(land_pts,ncpft)
 REAL(KIND=real_jlslsm), PARAMETER ::                                           &
   cconu = 12.0e-3,                                                             &
     ! kg C in 1 mol CO2.
-  conpar = 2.19e5,                                                             &
+  conpar = 2.19e5
     ! Conversion from mol s-1 to W for PAR (J/mol photons).
-  t_ref = zerodegc + 25.0,                                                     &
-    ! Reference temperature (K).
-  tref_rmol = t_ref * rmol
-    ! The product of t_ref and rmol (J mol-1).
 
 !-----------------------------------------------------------------------------
 ! Local scalar variables.
@@ -296,34 +287,14 @@ REAL(KIND=real_jlslsm) ::                                                      &
    ! Decay term.
 ,fstem                                                                         &
    ! Ratio of respiring stem wood to total wood.
-,jmax_numerator                                                                &
-   ! Numerator term in calculation of Jmax.
-,kc_val                                                                        &
-   ! Michaelis-Menten constant for CO2 (Pa) - for a single point.
-,ko_val                                                                        &
-   ! Michaelis-Menten constant for O2 (Pa) - for a single point.
 ,lma_tmp                                                                       &
    ! Temporary leaf mass per area for crops (kg leaf per m2 leaf area).
-,power                                                                         &
-   ! Exponent used in Q10 term.
 ,stem_resp_scaling                                                             &
    ! Scaling factor to reduce stem respiration
 ,stemc                                                                         &
    ! Stem carbon (kg m-2)
-,sun_term                                                                      &
+,sun_term
    ! Conversion from PAR to electron flux (mol electrons J-1).
-,t_minus_ref                                                                   &
-   ! Temperature relative to the reference (K).
-,t_term                                                                        &
-   ! A temperature-related term (mol J-1).
-,tau                                                                           &
-   ! Rubisco specificty for CO2 relative to O2.
-,tdegc                                                                         &
-   ! Temperature (deg C).
-,th_degc, tg_degc                                                              &
-   ! Temperatures t_home_gb and t_growth_gb in degrees Celsius.
-,vcmax_numerator
-   ! Numerator term in calculation of Vcmax.
 
 !-----------------------------------------------------------------------------
 ! Local array variables.
@@ -442,14 +413,6 @@ REAL(KIND=real_jlslsm) ::                                                      &
                             ! respiration.
 ,denom(land_pts)                                                               &
    ! Denominator in temperature-dependency of Vcmax (Collatz model only).
-,dsj(land_pts)                                                                 &
-   ! Entropy factor for Jmax, including any acclimation (J mol-1 K-1).
-,dsv(land_pts)                                                                 &
-   ! Entropy factor for Vcmax, including any acclimation (J mol-1 K-1).
-,actj(land_pts)                                                                &
-   ! Activation energy for Jmax, including any acclimation (J mol-1).
-,actv(land_pts)                                                                &
-   ! Activation energy for Vcmax, including any acclimation (J mol-1).
 ,ccp(land_pts)                                                                 &
    ! Photorespiratory compensatory point (Pa). This is zero for C4 plants.
 ,i2(land_pts)                                                                  &
@@ -562,12 +525,6 @@ REAL(KIND=real_jlslsm) ::                                                      &
 ,can_averaging_fac(land_pts)
                             ! WORK factor to convert top of canopy
                             ! value to canopy average.
-
-REAL(KIND=real_jlslsm) ::                                                      &
- act_j_tmp(n_photo_coef)                                                       &
-   ! Coefficients governing the acclimation of activation energy for Jmax.
-,act_v_tmp(n_photo_coef)
-   ! Coefficients governing the acclimation of activation energy for Vcmax.
 
 INTEGER(KIND=jpim), PARAMETER :: zhook_in  = 0
 INTEGER(KIND=jpim), PARAMETER :: zhook_out = 1

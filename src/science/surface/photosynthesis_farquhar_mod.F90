@@ -136,7 +136,7 @@ REAL(KIND=real_jlslsm), PARAMETER ::                                           &
     ! The product of t_ref and rmol (J mol-1).
 
 INTEGER ::                                                                     &
- i,j,k,l,m,n                                                                   &
+ l,m                                                                           &
                             ! WORK Loop counters.
 ,errcode
                             ! Error code to pass to ereport.
@@ -255,6 +255,8 @@ IF (lhook) CALL dr_hook(ModuleName//':'//RoutineName,zhook_in,zhook_handle)
 
   END DO
 !$OMP END PARALLEL DO
+
+IF (lhook) CALL dr_hook(ModuleName//':'//RoutineName,zhook_out,zhook_handle)
 
 END SUBROUTINE prep_farquhar
 
