@@ -7,6 +7,98 @@ MODULE photosynthesis_collatz_mod
 CHARACTER(LEN=*), PARAMETER, PRIVATE :: ModuleName='PHOTOSYNTHESIS_COLLATZ_MOD'
 
 CONTAINS
+
+SUBROUTINE prep_collatz(ft, land_field, veg_pts, veg_index, oa, tstar,         &
+                        denom, qtenf_term, ccp, kc, ko)
+
+USE conversions_mod, ONLY: zerodegc
+
+USE pftparm, ONLY:                                                             &
+! imported arrays that are not changed
+  c3, q10_leaf, tlow, tupp
+
+USE um_types, ONLY: real_jlslsm
+
+IMPLICIT NONE
+
+!-----------------------------------------------------------------------------
+! Arguments with intent(in).
+!-----------------------------------------------------------------------------
+INTEGER, INTENT(IN) ::                                                         &
+ ft                                                                            &
+                            ! Plant functional type.
+,land_field                                                                    &
+                            ! Total number of land points.
+,veg_pts                                                                       &
+                            ! Number of vegetated points.
+,veg_index(land_field)
+                            ! Index of vegetated points
+                            ! on the land grid.
+
+REAL(KIND=real_jlslsm), INTENT(IN) ::                                          &
+ oa(land_field)                                                                &
+                            ! Atmospheric O2 pressure (Pa).
+,tstar(land_field)
+                            ! Surface temperature (K).
+
+!-----------------------------------------------------------------------------
+! Arguments with INTENT(out).
+!-----------------------------------------------------------------------------
+REAL(KIND=real_jlslsm), INTENT(OUT) ::                                         &
+ denom(land_field)                                                             &
+    ! Denominator in equation for Vcmax with the Collatz model.
+,qtenf_term(land_field)                                                        &
+   ! Q10 temperature term used for Vcmax with the Collatz model.
+,ccp(land_field)                                                               &
+   ! Photorespiratory compensatory point (Pa). This is zero for C4 plants.
+,kc(land_field)                                                                &
+   ! Michaelis-Menten constant for CO2 (Pa).
+,ko(land_field)
+   ! Michaelis-Menten constant for O2 (Pa).
+
+!-----------------------------------------------------------------------------
+! Local scalar variables.
+!-----------------------------------------------------------------------------
+INTEGER ::                                                                     &
+ l,m
+
+REAL(KIND=real_jlslsm) ::                                                      &
+ power                                                                         &
+   ! Exponent used in Q10 term.
+,tau                                                                           &
+   ! Rubisco specificty for CO2 relative to O2.
+,tdegc
+   ! Temperature (deg C).
+
+  ! Use the Collatz model (for C3 or C4 plants).
+!$OMP PARALLEL DO IF(veg_pts > 1) DEFAULT(NONE) PRIVATE(l,m,power,tau,tdegc)   &
+!$OMP SHARED(c3, veg_pts, veg_index, ccp, denom, ft, kc, ko, oa, tlow,         &
+!$OMP        q10_leaf,  qtenf_term, tstar, tupp) SCHEDULE(STATIC)
+  DO m  = 1,veg_pts
+    l = veg_index(m)
+    tdegc         = tstar(l) - zerodegc
+    power         = 0.1 * (tdegc- 25.0)
+    denom(l)      = (1.0 + EXP (0.3 * (tdegc - tupp(ft)))) *                   &
+                    (1.0 + EXP (0.3 * (tlow(ft) - tdegc)))
+    qtenf_term(l) = q10_leaf(ft)** power
+
+    IF ( c3(ft) == 1 ) THEN
+      ! Calculate terms that are only needed for C3 plants.
+      ! Although oa, kc and ko are always used together we keep them separate
+      ! to maintain bit comparability.
+      tau    = 2600.0  * (0.57 ** power)
+      ccp(l) = 0.5 * oa(l) / tau
+      kc(l)  = 30.0    * (2.1 ** power)
+      ko(l)  = 30000.0 * (1.2 ** power)
+    END IF
+
+  END DO
+!$OMP END PARALLEL DO
+
+END SUBROUTINE prep_collatz
+
+
+
 ! *********************************************************************
 ! Purpose:
 ! Calculates leaf internal CO2 pressure using either:

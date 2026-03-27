@@ -55,9 +55,10 @@ SUBROUTINE sf_stom  (land_pts,land_index                                       &
 
 USE leaf_mod, ONLY: leaf
 USE photosynthesis_collatz_mod, ONLY:                                          &
-     leaf_limits_collatz, calc_photo_collatz
+    prep_collatz, leaf_limits_collatz, calc_photo_collatz
 USE photosynthesis_farquhar_mod, ONLY:                                         &
-    leaf_limits_farquhar, calc_photo_farquhar, calc_electron_flux
+    prep_farquhar, leaf_limits_farquhar, calc_photo_farquhar,                  &
+    calc_electron_flux
 USE leaf_processes_sox_mod, ONLY: leaf_processes_sox
 USE bvoc_emissions_mod, ONLY: bvoc_emissions
 
@@ -850,142 +851,16 @@ END DO
 ! and layers.
 ! tstar is for the current pft, so can't be moved up another level.
 !-----------------------------------------------------------------------------
-
 SELECT CASE ( pft_photo_model )
 
 CASE ( photo_collatz )
-  ! Use the Collatz model (for C3 or C4 plants).
-!$OMP PARALLEL DO IF(veg_pts > 1) DEFAULT(NONE) PRIVATE(l,m,power,tau,tdegc)   &
-!$OMP SHARED(c3, veg_pts, veg_index, ccp, denom, ft, kc, ko, oa, tlow,         &
-!$OMP        q10_leaf,  qtenf_term, tstar, tupp) SCHEDULE(STATIC)
-  DO m  = 1,veg_pts
-    l = veg_index(m)
-    tdegc         = tstar(l) - zerodegc
-    power         = 0.1 * (tdegc- 25.0)
-    denom(l)      = (1.0 + EXP (0.3 * (tdegc - tupp(ft)))) *                   &
-                    (1.0 + EXP (0.3 * (tlow(ft) - tdegc)))
-    qtenf_term(l) = q10_leaf(ft)** power
-
-    IF ( c3(ft) == 1 ) THEN
-      ! Calculate terms that are only needed for C3 plants.
-      ! Although oa, kc and ko are always used together we keep them separate
-      ! to maintain bit comparability.
-      tau    = 2600.0  * (0.57 ** power)
-      ccp(l) = 0.5 * oa(l) / tau
-      kc(l)  = 30.0    * (2.1 ** power)
-      ko(l)  = 30000.0 * (1.2 ** power)
-    END IF
-
-  END DO
-!$OMP END PARALLEL DO
+  CALL prep_collatz(ft, land_pts, veg_pts, veg_index, oa, tstar,               &
+                    denom, qtenf_term, ccp, kc, ko)
 
 CASE ( photo_farquhar )
-  ! Use the Farquhar model (for C3 plants).
-  ! Calculate a constant.
-  sun_term = alpha_elec(ft) / conpar
-
-  ! Load parameter values, depending on options.
-  SELECT CASE ( photo_acclim_model )
-  CASE ( 0 )
-    ! No acclimation.
-    ! Copy the PFT parameters, including fixed J:V.
-!$OMP PARALLEL DO IF(veg_pts > 1) DEFAULT(NONE) PRIVATE(l,m)                   &
-!$OMP SHARED(ds_jmax, ds_vcmax, dsj, dsv, ft, jv25, jv25_ratio,                &
-!$OMP        actj, act_jmax, actv, act_vcmax, veg_index, veg_pts)              &
-!$OMP SCHEDULE(STATIC)
-    DO m = 1,veg_pts
-      l = veg_index(m)
-      dsj(l)  = ds_jmax(ft)
-      dsv(l)  = ds_vcmax(ft)
-      jv25(l) = jv25_ratio(ft)
-      actj(l) = act_jmax(ft)
-      actv(l) = act_vcmax(ft)
-    END DO
-!$OMP END PARALLEL DO
-
-  CASE ( photo_adapt, photo_acclim, photo_adapt_acclim )
-    ! These use the same forms but t_growth_gb will generally be
-    ! different. Although there is no dependency on PFT here (meaning
-    ! this could be moved up and out of a PFT loop), we leave it here
-    ! so that these parameters are calculated here regardless of the
-    ! acclimation model selected.
-
-    ! Decide whether the activation energies are subject to acclimation.  If
-    ! they are, then the energies vary by gridbox but not by PFT, otherwise
-    ! the energies vary by PFT but not by gridbox.
-    SELECT CASE ( photo_act_model )
-    CASE ( photo_act_pft )
-      act_j_tmp(:) = [act_jmax(ft), 0.0, 0.0]
-      act_v_tmp(:) = [act_vcmax(ft), 0.0, 0.0]
-    CASE ( photo_act_gb )
-      act_j_tmp(:) = act_j_coef(:)
-      act_v_tmp(:) = act_v_coef(:)
-    CASE DEFAULT
-      errcode = 101  !  a hard error
-      CALL ereport(RoutineName, errcode,                                       &
-                   'photo_act_model should be photo_act_pft or photo_act_gb')
-    END SELECT
-
-!$OMP PARALLEL DO IF(veg_pts > 1) DEFAULT(NONE) PRIVATE(l,m,th_degc,tg_degc)   &
-!$OMP SHARED(dsj, dsj_coef, dsv, dsv_coef, jv25, jv25_coef,                    &
-!$OMP        actj, act_j_tmp, actv, act_v_tmp,                                 &
-!$OMP        t_home_gb, t_growth_gb, veg_index, veg_pts)                       &
-!$OMP SCHEDULE(STATIC)
-    DO m = 1,veg_pts
-      l = veg_index(m)
-      th_degc = t_home_gb(l) - zerodegc
-      tg_degc = t_growth_gb(l) - zerodegc
-      dsj(l)  = dsj_coef(1) + dsj_coef(2) * th_degc + dsj_coef(3) * tg_degc
-      dsv(l)  = dsv_coef(1) + dsv_coef(2) * th_degc + dsv_coef(3) * tg_degc
-      jv25(l) = jv25_coef(1) + jv25_coef(2) * th_degc + jv25_coef(3) * tg_degc
-      actj(l) = act_j_tmp(1) + act_j_tmp(2) * th_degc + act_j_tmp(3) * tg_degc
-      actv(l) = act_v_tmp(1) + act_v_tmp(2) * th_degc + act_v_tmp(3) * tg_degc
-    END DO
-!$OMP END PARALLEL DO
-
-  END SELECT  !  photo_acclim_model
-
-!$OMP PARALLEL DO IF(veg_pts > 1) DEFAULT(NONE)                                &
-!$OMP PRIVATE(l, m, jmax_numerator, kc_val, ko_val, t_minus_ref, t_term,       &
-!$OMP         vcmax_numerator)                                                 &
-!$OMP SHARED(c3, veg_pts, veg_index, acr, actj, actv, alpha_elec,              &
-!$OMP        ccp, deact_jmax, deact_vcmax, dsj, dsv, ft, i2, jmax_temp, km,    &
-!$OMP        oa, q10_leaf, qtenf_term, tstar, vcmax_temp) SCHEDULE(STATIC)
-  DO m = 1,veg_pts
-
-    l = veg_index(m)
-    ! Temperature responses of carboxylation, oxygenation,and CO2 compensation
-    ! point, from Bernacchi et al. (2001).
-    t_minus_ref = tstar(l) - t_ref
-    t_term      = t_minus_ref / ( tref_rmol * tstar(l) )
-    ccp(l)      = 4.73078 * EXP( 37830.0 * t_term )
-    ! For the Farquhar model we combine oa, kc and ko into km.
-    kc_val      = 44.8    * EXP( 79430.0 * t_term )
-    ko_val      = 30808.2 * EXP( 36380.0 * t_term )
-    km(l)       = kc_val * ( 1.0 + oa(l) / ko_val )
-    ! Radiation that goes to Photosystem II.
-    i2(l)       = alpha_elec(ft) * acr(l)
-
-    ! Calculate the temperature response of Vcmax and Jmax, Eq.17 of
-    ! Medlyn et al. (2002).
-    vcmax_numerator = EXP( actv(l) * t_minus_ref                               &
-                           / ( tref_rmol * tstar(l) ) )                        &
-                      * ( 1.0 + EXP( ( t_ref * dsv(l) - deact_vcmax(ft) )      &
-                                     / tref_rmol ) )
-    vcmax_temp(l)   = vcmax_numerator                                          &
-                      / ( 1.0 + EXP( ( tstar(l) * dsv(l) - deact_vcmax(ft) )   &
-                                     / ( tstar(l) * rmol ) ) )
-
-    jmax_numerator = EXP( actj(l) * t_minus_ref                                &
-                           / ( tref_rmol * tstar(l) ) )                        &
-                      * ( 1.0 + EXP( ( t_ref * dsj(l) - deact_jmax(ft) )       &
-                                     / tref_rmol ) )
-    jmax_temp(l)   = jmax_numerator                                            &
-                     / ( 1.0 + EXP( ( tstar(l) * dsj(l) - deact_jmax(ft) )     &
-                                    / ( tstar(l) * rmol ) ) )
-
-  END DO
-!$OMP END PARALLEL DO
+  CALL prep_farquhar(ft, land_pts, veg_pts, veg_index,                         &
+                     acr, tstar, t_home_gb, t_growth_gb, oa,                   &
+                     ccp, i2, km, jmax_temp, vcmax_temp)
 
 CASE DEFAULT
   errcode = 101  !  a hard error
