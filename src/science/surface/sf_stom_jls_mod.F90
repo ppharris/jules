@@ -81,7 +81,7 @@ USE CN_utils_mod, ONLY:                                                        &
 
 USE pftparm, ONLY:                                                             &
 ! imported arrays that are not changed
-    a_wl, a_ws, b_wl, c3, eta_sl, kpar, nl0, nr_nl, ns_nl, omega,              &
+    alpha_elec, a_wl, a_ws, b_wl, c3, eta_sl, kpar, nl0, nr_nl, ns_nl, omega,  &
     r_grow, sigl, lma, nmass, kn, knl, nsw, nr, hw_sw
 
 USE ccarbon, ONLY:                                                             &
@@ -641,6 +641,9 @@ IF ( pft_photo_model == photo_farquhar ) THEN
     END DO
 !$OMP END PARALLEL DO
   END SELECT
+
+  ! Calculate a constant.
+  sun_term = alpha_elec(ft) / conpar
 END IF
 
 !-----------------------------------------------------------------------------

@@ -107,9 +107,7 @@ REAL(KIND=real_jlslsm) ::                                                      &
 ! Local scalar variables.
 !-----------------------------------------------------------------------------
 REAL(KIND=real_jlslsm) ::                                                      &
- sun_term                                                                      &
-   ! Conversion from PAR to electron flux (mol electrons J-1).
-,t_minus_ref                                                                   &
+ t_minus_ref                                                                   &
    ! Temperature relative to the reference (K).
 ,t_term                                                                        &
    ! A temperature-related term (mol J-1).
@@ -150,8 +148,6 @@ CHARACTER(LEN=*), PARAMETER :: RoutineName='PREP_FARQUHAR'
 IF (lhook) CALL dr_hook(ModuleName//':'//RoutineName,zhook_in,zhook_handle)
 
   ! Use the Farquhar model (for C3 plants).
-  ! Calculate a constant.
-  sun_term = alpha_elec(ft) / conpar
 
   ! Load parameter values, depending on options.
   SELECT CASE ( photo_acclim_model )
