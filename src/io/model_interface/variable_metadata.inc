@@ -9355,9 +9355,22 @@ DATA metadata(722) / var_metadata(                                             &
     "kg s-1"                                                                   &
   ) /
 !-----------------------------------------------------------------------------
-! Metadata for resp_ref
+! Metadata for inland_outflow_rp
 !-----------------------------------------------------------------------------
 DATA metadata(723) / var_metadata(                                             &
+! String identifier
+    'inland_outflow_rp',                                                       &
+! Variable type
+    var_type_rp,                                                               &
+! Long name
+    "Inland basin flow on river routing grid",                                 &
+! Units
+    "kg m-2 s-1"                                                               &
+  ) /
+!-----------------------------------------------------------------------------
+! Metadata for resp_ref
+!-----------------------------------------------------------------------------
+DATA metadata(724) / var_metadata(                                             &
 ! String identifier
     'tstar_ref',                                                               &
 ! Variable type
@@ -9370,7 +9383,7 @@ DATA metadata(723) / var_metadata(                                             &
 !-----------------------------------------------------------------------------
 ! Metadata for resp_ref
 !-----------------------------------------------------------------------------
-DATA metadata(724) / var_metadata(                                             &
+DATA metadata(725) / var_metadata(                                             &
 ! String identifier
     'resp_ref',                                                                &
 ! Variable type
@@ -9383,7 +9396,7 @@ DATA metadata(724) / var_metadata(                                             &
 !-----------------------------------------------------------------------------
 ! Metadata for resp_fac
 !-----------------------------------------------------------------------------
-DATA metadata(725) / var_metadata(                                             &
+DATA metadata(726) / var_metadata(                                             &
 ! String identifier
     'resp_fac',                                                                &
 ! Variable type
