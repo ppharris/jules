@@ -1199,6 +1199,25 @@ CASE ( 5, 6 )
 
     END IF  !  pft_photo_model
 
+    !--------------------------------------------------------------------------
+    ! Apply Faber et al (2022) circadian adjustment of dark respiration.
+    ! Inhibition in the light is done later.
+    ! --------------------------------------------------------------------------
+    IF ( l_resp_diurnal ) THEN
+      DO m = 1,veg_pts
+        l = veg_index(m)
+        IF ( ipar(l) < ipar_min ) THEN
+           ! Night
+           tstar_predawn(l) = tstar(l)
+           rd_predawn(l,n) = rd_dark(l,n) / rd_faber_base
+        ELSE
+           ! Day
+           factor = rd_faber(local_time, longitude, latitude)
+           rd_dark(l,n) = rd_predawn(l,n) * factor * Q10(tstar, tstar_predawn)
+        END IF
+      END DO
+    END IF
+
     !-------------------------------------------------------------------------
     ! Iterate to ensure that the canopy humidity deficit is consistent with
     ! the H2O flux.
@@ -1260,45 +1279,20 @@ CASE ( 5, 6 )
       END IF  !  photo_model
 
       !-----------------------------------------------------------------------
-      ! Calculate dark respiration accounting for inhibiion in the light.
+      ! Introducing inhibition of leaf respiration in the light for sunlit
+      ! and shaded leaves, from papers by Atkin et al. This is an
+      ! improvement over the description used for can_rad_mod=4.
+      ! This does not change between iterations (though open_index might).
       !-----------------------------------------------------------------------
-      IF ( l_resp_diurnal ) THEN
-        !---------------------------------------------------------------------
-        ! Use Faber et al circadian inhibition.
-        !---------------------------------------------------------------------
-        DO m = 1,open_pts
-          l = veg_index(open_index(m))
-          factor = faber_factor(local_time, longitude)
-          IF ( ipar(l) < ipar_min ) THEN
-             ! Night
-             tstar_sunrise(l) = tstar(l)
-             rd_sunrise_sun(l,n) = rd_sun(l,n) / factor
-             rd_sunrise_shd(l,n) = rd_shd(l,n) / factor
-          ELSE
-             ! Day
-             rd_sun(l,n) = rd_sunrise_sun(l,n) * 0.7 * factor * Q10(tstar, tstar_sunrise)
-             rd_shd(l,n) = rd_sunrise_shd(l,n) * 0.7 * factor * Q10(tstar, tstar_sunrise)
-          END IF
-        END DO
-      ELSE
-        !---------------------------------------------------------------------
-        ! Introducing inhibition of leaf respiration in the light for sunlit
-        ! and shaded leaves, from papers by Atkin et al. This is an
-        ! improvement over the description used for can_rad_mod=4.
-        ! This does not change between iterations (though open_index might).
-        !---------------------------------------------------------------------
 !$OMP DO SCHEDULE(STATIC)
-        DO m = 1,open_pts
-          l = veg_index(open_index(m))
-          IF ( fapar_sun(l,n) * icr(l) * fsun(l,n) * dlai(l) *                 &
-               1.0e6 >  10.0 ) rd_sun(l) = 0.7 * rd_sun(l)
-          IF ( fapar_shd(l,n) * icr(l) * (1.0 - fsun(l,n)) * dlai(l) *         &
-               1.0e6 >  10.0 ) rd_shd(l) = 0.7 * rd_shd(l)
-        END DO
+      DO m = 1,open_pts
+        l = veg_index(open_index(m))
+        IF ( fapar_sun(l,n) * icr(l) * fsun(l,n) * dlai(l) *                   &
+             1.0e6 >  10.0 ) rd_sun(l) = 0.7 * rd_sun(l)
+        IF ( fapar_shd(l,n) * icr(l) * (1.0 - fsun(l,n)) * dlai(l) *           &
+             1.0e6 >  10.0 ) rd_shd(l) = 0.7 * rd_shd(l)
+      END DO
 !$OMP END DO
-      END IF
-
-
 !$OMP END PARALLEL
 
       !-----------------------------------------------------------------------
