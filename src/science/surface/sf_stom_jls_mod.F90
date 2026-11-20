@@ -111,6 +111,10 @@ USE veg3_field_mod, ONLY: veg_state_type
 
 USE sugar_mod, ONLY: sugar
 
+USE model_time_mod, ONLY : current_time
+USE model_grid_mod, ONLY : longitude, latitude
+USE circadian_mod, ONLY : ipar_min, rd_faber
+
 IMPLICIT NONE
 
 !-----------------------------------------------------------------------------
@@ -564,6 +568,20 @@ REAL(KIND=real_jlslsm) ::                                                      &
    ! Coefficients governing the acclimation of activation energy for Jmax.
 ,act_v_tmp(n_photo_coef)
    ! Coefficients governing the acclimation of activation energy for Vcmax.
+
+
+!-----------------------------------------------------------------------------
+! Temporary declarations for circadian dark respiration calcs.
+!-----------------------------------------------------------------------------
+REAL(KIND=real_jlslsm) ::                                                      &
+ tstar_predawn(land_pts)                                                       &
+,rd_predawn(land_pts,ilayers)
+
+REAL(KIND=real_jlslsm) :: factor
+
+LOGICAL :: l_resp_diurnal = .TRUE.
+
+
 
 INTEGER(KIND=jpim), PARAMETER :: zhook_in  = 0
 INTEGER(KIND=jpim), PARAMETER :: zhook_out = 1
@@ -1202,18 +1220,20 @@ CASE ( 5, 6 )
     !--------------------------------------------------------------------------
     ! Apply Faber et al (2022) circadian adjustment of dark respiration.
     ! Inhibition in the light is done later.
-    ! --------------------------------------------------------------------------
+    !--------------------------------------------------------------------------
     IF ( l_resp_diurnal ) THEN
       DO m = 1,veg_pts
         l = veg_index(m)
+        j = (land_index(l) - 1) / t_i_length + 1
+        i = land_index(l) - (j-1) * t_i_length
         IF ( ipar(l) < ipar_min ) THEN
            ! Night
            tstar_predawn(l) = tstar(l)
-           rd_predawn(l,n) = rd_dark(l,n) / rd_faber_base
+           rd_predawn(l,n) = rd_dark(l)
         ELSE
            ! Day
-           factor = rd_faber(local_time, longitude, latitude)
-           rd_dark(l,n) = rd_predawn(l,n) * factor * Q10(tstar, tstar_predawn)
+           factor = rd_faber(current_time%time, longitude(i,j), latitude(i,j))
+           rd_dark(l) = rd_predawn(l,n) * factor * Q10(tstar, tstar_predawn)
         END IF
       END DO
     END IF
