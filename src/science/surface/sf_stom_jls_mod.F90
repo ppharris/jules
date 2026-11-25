@@ -113,7 +113,7 @@ USE sugar_mod, ONLY: sugar
 
 USE model_time_mod, ONLY : current_time
 USE model_grid_mod, ONLY : longitude, latitude
-USE circadian_mod, ONLY : ipar_min, rd_faber
+USE circadian_mod, ONLY : ipar_min, rd_faber, q10_factor
 
 IMPLICIT NONE
 
@@ -1218,8 +1218,10 @@ CASE ( 5, 6 )
     END IF  !  pft_photo_model
 
     !--------------------------------------------------------------------------
-    ! Apply Faber et al (2022) circadian adjustment of dark respiration.
-    ! Inhibition in the light is done later.
+    ! Apply Faber et al (2022) circadian adjustment of dark respiration.  This
+    ! is not layer dependent, so these calculations could be done outside of
+    ! the layers loop.
+    ! Inhibition in the light is applied later and is layer-dependent.
     !--------------------------------------------------------------------------
     IF ( l_resp_diurnal ) THEN
       DO m = 1,veg_pts
@@ -1233,7 +1235,8 @@ CASE ( 5, 6 )
         ELSE
            ! Day
            factor = rd_faber(current_time%time, longitude(i,j), latitude(i,j))
-           rd_dark(l) = rd_predawn(l,n) * factor * Q10(tstar, tstar_predawn)
+           rd_dark(l) = rd_predawn(l,n) * factor                               &
+                      * q10_factor(q10_leaf(ft), tstar(l), tstar_predawn(l))
         END IF
       END DO
     END IF

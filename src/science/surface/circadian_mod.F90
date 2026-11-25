@@ -10,7 +10,7 @@ REAL(KIND=real_jlslsm), PARAMETER :: ipar_min = 1.0E-6
 
 PRIVATE
 
-PUBLIC ipar_min, rd_faber
+PUBLIC ipar_min, rd_faber, q10_factor
 
 CONTAINS
 
@@ -48,5 +48,32 @@ factor = (a_aus + b_aus * local_hour + b1_aus * local_hour * local_hour) /     &
          (a_aus + b_aus * base_hour + b1_aus * base_hour * base_hour)
 
 END FUNCTION rd_faber
+
+
+! *********************************************************************
+! Return a fixed Q10 mulplication factor that extrapolates a rate at a
+! reference temperature to a rate at a target temperature.
+! *********************************************************************
+FUNCTION q10_factor(q10, tstar, tstar_ref)
+
+IMPLICIT NONE
+
+REAL(KIND=real_jlslsm), INTENT(in) ::                                          &
+ q10,                                                                          &
+!                        ! IN Q10 factor.
+ tstar,                                                                        &
+!                        ! IN Target temperature (K)
+ tstar_ref
+!                        ! IN Reference temperature (K)
+
+REAL(KIND=real_jlslsm) :: power
+REAL(KIND=real_jlslsm) :: q10_factor
+
+power = 0.1 * (tstar - tstar_ref)
+
+q10_factor = q10 ** power
+
+END FUNCTION q10_factor
+
 
 END MODULE circadian_mod
